@@ -36,7 +36,7 @@ struct StorageView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 22) {
-                    NFCScanButton()
+                    NFCScanButton(nfcManager: nfcManager)
 
                     if dormentesFiltrados.isEmpty {
                         Text("Nenhum dormente encontrado")
@@ -56,6 +56,17 @@ struct StorageView: View {
             }
             .navigationTitle("Estoque")
             .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(item: $scannedDormenteID) { dormenteID in
+                if let dormente = dormentes.first(where: { $0.id == dormenteID }) {
+                    EachDormenteView(dormente: dormente)
+                } else {
+                    ContentUnavailableView(
+                        "Dormente não encontrado",
+                        systemImage: "shippingbox"
+                    )
+                }
+            }
+
 //            .toolbar {
 //                ToolbarItem(placement: .primaryAction) {
 //                    Button {
@@ -67,16 +78,6 @@ struct StorageView: View {
 //                }
 //            }
         }
-        .navigationDestination(item: $scannedDormenteID) { dormenteID in
-            if let dormente = dormentes.first(where: { $0.id == dormenteID }) {
-                EachDormenteView(dormente: dormente)
-            } else {
-                ContentUnavailableView(
-                    "Dormente não encontrado",
-                    systemImage: "shippingbox"
-                )
-            }
-        }
         .onChange(of: nfcManager.scannedCode) { _, newCode in
             guard let code = newCode else {
                 return
@@ -87,6 +88,14 @@ struct StorageView: View {
             } else {
                 showUnknownDormenteAlert = true
             }
+        }
+        .alert("Não foi possível ler a etiqueta", isPresented: Binding(
+            get: { nfcManager.errorMessage != nil },
+            set: { if !$0 { nfcManager.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { nfcManager.errorMessage = nil }
+        } message: {
+            Text(nfcManager.errorMessage ?? "")
         }
         .alert(
             "Dormente não encontrado",

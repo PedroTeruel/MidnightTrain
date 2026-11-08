@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct NFCScanButton: View {
-    @StateObject private var nfcManager = NFCManager()
+    @ObservedObject var nfcManager: NFCManager
     var body: some View {
         Button{
             nfcManager.startReading()
@@ -40,5 +40,5 @@ struct NFCScanButton: View {
 }
 
 #Preview {
-    NFCScanButton()
+    NFCScanButton(nfcManager: NFCManager())
 }
