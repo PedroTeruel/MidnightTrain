@@ -13,13 +13,17 @@ class NFCManager: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate {
 
     @Published var contentRead = "Nenhum dormente identificado"
     @Published var scannedCode: String?
+    @Published var errorMessage: String?
 
     var session: NFCNDEFReaderSession?
     var pendingCode: String?
 
     func startReading() {
+        guard session == nil else { return }
+        errorMessage = nil
         guard NFCNDEFReaderSession.readingAvailable else {
             contentRead = "NFC indisponível neste dispositivo"
+            errorMessage = contentRead
             return
         }
         scannedCode = nil
@@ -67,6 +71,7 @@ class NFCManager: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate {
         _ session: NFCNDEFReaderSession,
         didInvalidateWithError error: Error
     ) {
+        guard self.session === session else { return }
         self.session = nil
         defer { pendingCode = nil }
 
@@ -76,6 +81,7 @@ class NFCManager: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate {
             case .readerSessionInvalidationErrorFirstNDEFTagRead:
                 guard let code = pendingCode else {
                     contentRead = "Etiqueta sem identificador válido"
+                    errorMessage = contentRead
                     return
                 }
 
@@ -93,5 +99,6 @@ class NFCManager: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate {
         }
 
         contentRead = "Erro: \(error.localizedDescription)"
+        errorMessage = contentRead
     }
 }
