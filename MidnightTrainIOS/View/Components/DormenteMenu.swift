@@ -8,6 +8,7 @@ import SwiftUI
 
 struct DormenteMenu: View {
     let dormentes: [Dormente]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     //@State private var dormentes: [Dormente] = []
     //@State private var selecionado: Dormente?
@@ -18,22 +19,24 @@ struct DormenteMenu: View {
                 NavigationLink {
                     EachDormenteView(dormente: dormente)
                 } label: {
-                    HStack(spacing: 10) {
+                    (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(spacing: 10))) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(dormente.nome)
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.headline)
                                 .foregroundStyle(.primary)
 
                             Text("Lote \(dormente.lote) – Setor \(dormente.setor)")
-                                .font(.system(size: 16))
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
 
-                        Spacer(minLength: 8)
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Spacer(minLength: 8)
+                        }
 
                         Text(dormente.status.rawValue)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(cor(dormente.status))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
@@ -42,16 +45,21 @@ struct DormenteMenu: View {
                             )
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 16, weight: .semibold))
+                            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(.primary)
                             .frame(width: 36, height: 36)
-                            .background(.white.opacity(0.65), in: Circle())
+                            .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Circle())
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: 88)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
 
                 if dormente.id != dormentes.last?.id {
                     Divider()
@@ -74,7 +82,7 @@ struct DormenteMenu: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: 24)
-                .stroke(.white.opacity(0.8), lineWidth: 1)
+                .stroke(Color(uiColor: .separator), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
 
@@ -142,7 +150,7 @@ struct DormenteMenu: View {
 //                                    cor(dormente.status).opacity(0.2),
 //                                    in: RoundedRectangle(cornerRadius: 10)
 //                                )
-//                                .foregroundStyle(cor(dormente.status))
+//                                .foregroundStyle(.primary)
 //
 //                            Image(systemName: "chevron.right")
 //                                .foregroundStyle(.primary)
