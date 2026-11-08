@@ -276,3 +276,4 @@ struct EachDormenteView: View {
         EachDormenteView(dormente: Dormente.exemplos[0])
     }
 }
+
