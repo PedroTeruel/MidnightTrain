@@ -11,6 +11,7 @@ struct EachDormenteView: View {
     let dormente: Dormente
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var condicao = "Não avaliada"
     @State private var tamanho = "32x29m"
@@ -57,6 +58,7 @@ struct EachDormenteView: View {
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
+                                    .accessibilityHidden(true)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -67,7 +69,7 @@ struct EachDormenteView: View {
                         linha("Decisão") {
                             Text(dormente.status.rawValue)
                                 .font(.subheadline.weight(.medium))
-                                .foregroundStyle(corDoStatus)
+                                .foregroundStyle(.primary)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(
@@ -88,6 +90,7 @@ struct EachDormenteView: View {
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
+                                    .accessibilityHidden(true)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -103,6 +106,7 @@ struct EachDormenteView: View {
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
+                                    .accessibilityHidden(true)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -112,18 +116,22 @@ struct EachDormenteView: View {
 
                         linha("Descrição") {
                             TextField("Adicionar", text: $descricao)
-                                .multilineTextAlignment(.trailing)
+                                .accessibilityLabel("Descrição")
+                                .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
                         }
                     }
                 }
 
-                HStack {
+                (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout())) {
                     Text("Última atualização:")
-                    Spacer()
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Spacer()
+                    }
                     Text("Hoje, 08:45")
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -138,8 +146,9 @@ struct EachDormenteView: View {
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(.blue, in: Capsule())
+                    .padding(.vertical, 15)
+                    .frame(minHeight: 54)
+                    .background(Color(red: 0, green: 0.32, blue: 0.76), in: Capsule())
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
@@ -185,10 +194,11 @@ struct EachDormenteView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "chevron.left")
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                         .font(.headline)
                         .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.65), in: Circle())
+                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Circle())
                 }
                 .accessibilityLabel("Voltar")
 
@@ -196,7 +206,9 @@ struct EachDormenteView: View {
             }
 
             Text(dormente.nome)
-                .font(.system(size: 30, weight: .bold))
+                .font(.largeTitle.bold())
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -208,6 +220,7 @@ struct EachDormenteView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(titulo)
                 .font(.caption.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
                 .foregroundStyle(.secondary)
 
             conteudo()
@@ -232,15 +245,19 @@ struct EachDormenteView: View {
         _ titulo: String,
         @ViewBuilder conteudo: () -> Conteudo
     ) -> some View {
-        HStack(spacing: 8) {
+        (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
             Text(titulo)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
 
-            Spacer(minLength: 8)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer(minLength: 8)
+            }
 
             conteudo()
         }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: 48)
         .contentShape(Rectangle())
     }
