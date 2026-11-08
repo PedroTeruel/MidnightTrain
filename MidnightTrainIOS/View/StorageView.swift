@@ -102,18 +102,22 @@ struct StorageView: View {
         HStack(spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityHidden(true)
                     .foregroundStyle(.primary)
 
                 TextField("Buscar lote ou setor", text: $busca)
+                    .accessibilityLabel("Buscar lote ou setor")
                     .autocorrectionDisabled()
                     .submitLabel(.search)
             }
             .padding(.horizontal, 16)
-            .frame(height: 50)
+            .padding(.vertical, 12)
+            .frame(minHeight: 50)
             .background(.regularMaterial, in: Capsule())
             .overlay {
                 Capsule()
-                    .stroke(.white.opacity(0.8), lineWidth: 1)
+                    .stroke(Color(uiColor: .separator), lineWidth: 1)
             }
 
             Menu {
@@ -137,15 +141,17 @@ struct StorageView: View {
             } label: {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.title3)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundStyle(.primary)
                     .frame(width: 50, height: 50)
                     .background(.regularMaterial, in: Circle())
                     .overlay {
                         Circle()
-                            .stroke(.white.opacity(0.8), lineWidth: 1)
+                            .stroke(Color(uiColor: .separator), lineWidth: 1)
                     }
             }
             .accessibilityLabel("Filtrar por status")
+            .accessibilityValue(filtroStatus?.rawValue ?? "Todos")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
