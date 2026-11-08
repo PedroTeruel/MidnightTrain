@@ -6,20 +6,21 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct EachDormenteView: View {
-    let dormente: Dormente
+    @Bindable var dormente: Dormente
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var saveError: String?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    @State private var condicao = "Não avaliada"
-    @State private var tamanho = "32x29m"
-    @State private var especie = "Araucária"
-    @State private var descricao = ""
     @State private var campoEmEdicao: Campo?
 
     private enum Campo: String, Identifiable {
+        case status = "Decisão"
         case condicao = "Condição"
         case tamanho = "Tamanho"
         case especie = "Espécie"
@@ -42,7 +43,7 @@ struct EachDormenteView: View {
                         Divider()
 
                         linha("Local") {
-                            Text("Pátio A - Setor \(dormente.setor)")
+                            Text("\(dormente.patio) - Setor \(dormente.setor)")
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -54,7 +55,7 @@ struct EachDormenteView: View {
                             campoEmEdicao = .condicao
                         } label: {
                             linha("Condição") {
-                                Text(condicao)
+                                Text(dormente.condicao)
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
@@ -66,17 +67,22 @@ struct EachDormenteView: View {
 
                         Divider()
 
-                        linha("Decisão") {
-                            Text(dormente.status.rawValue)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.primary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    corDoStatus.opacity(0.16),
-                                    in: RoundedRectangle(cornerRadius: 9)
-                                )
+                        Button {
+                            campoEmEdicao = .status
+                        } label: {
+                            linha("Decisão") {
+                                Text(dormente.status.rawValue)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        corDoStatus.opacity(0.16),
+                                        in: RoundedRectangle(cornerRadius: 9)
+                                    )
+                            }
                         }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -86,7 +92,7 @@ struct EachDormenteView: View {
                             campoEmEdicao = .tamanho
                         } label: {
                             linha("Tamanho") {
-                                Text(tamanho)
+                                Text(dormente.tamanho)
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
@@ -102,7 +108,7 @@ struct EachDormenteView: View {
                             campoEmEdicao = .especie
                         } label: {
                             linha("Espécie") {
-                                Text(especie)
+                                Text(dormente.especie)
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
@@ -115,7 +121,7 @@ struct EachDormenteView: View {
                         Divider()
 
                         linha("Descrição") {
-                            TextField("Adicionar", text: $descricao)
+                            TextField("Adicionar", text: $dormente.descricao)
                                 .accessibilityLabel("Descrição")
                                 .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
                         }
@@ -127,7 +133,7 @@ struct EachDormenteView: View {
                     if !dynamicTypeSize.isAccessibilitySize {
                         Spacer()
                     }
-                    Text("Hoje, 08:45")
+                    Text(dormente.ultimaAtualizacao, format: .dateTime.day().month().year().hour().minute())
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -154,13 +160,37 @@ struct EachDormenteView: View {
             .padding(.vertical, 10)
             .background(Color(uiColor: .systemGroupedBackground))
         }
+        .onChange(of: [
+            dormente.nome, dormente.lote, dormente.setor, dormente.patio, dormente.codigoNFC ?? "",
+            dormente.status.rawValue, dormente.condicao, dormente.tamanho,
+            dormente.especie, dormente.descricao
+        ]) { _, _ in
+            dormente.ultimaAtualizacao = .now
+            salvar()
+        }
+        .alert("Não foi possível salvar", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("Tentar novamente") { salvar() }
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $campoEmEdicao) { campo in
             NavigationStack {
                 Form {
                     switch campo {
+                    case .status:
+                        Picker("Decisão", selection: $dormente.status) {
+                            ForEach(Status.allCases, id: \.self) { status in
+                                Text(status.rawValue).tag(status)
+                            }
+                        }
+
                     case .condicao:
-                        Picker("Condição", selection: $condicao) {
+                        Picker("Condição", selection: $dormente.condicao) {
                             Text("Não avaliada").tag("Não avaliada")
                             Text("Boa").tag("Boa")
                             Text("Atenção").tag("Atenção")
@@ -168,10 +198,10 @@ struct EachDormenteView: View {
                         }
 
                     case .tamanho:
-                        TextField("Tamanho", text: $tamanho)
+                        TextField("Tamanho", text: $dormente.tamanho)
 
                     case .especie:
-                        TextField("Espécie", text: $especie)
+                        TextField("Espécie", text: $dormente.especie)
                     }
                 }
                 .navigationTitle(campo.rawValue)
@@ -184,6 +214,15 @@ struct EachDormenteView: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+    }
+
+    private func salvar() {
+        do {
+            try modelContext.save()
+            saveError = nil
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 
@@ -272,8 +311,11 @@ struct EachDormenteView: View {
 }
 
 #Preview {
+    let container = try! DormenteStore.makeContainer(inMemory: true)
+    let dormente = try! container.mainContext.fetch(FetchDescriptor<Dormente>())[0]
     NavigationStack {
-        EachDormenteView(dormente: Dormente.exemplos[0])
+        EachDormenteView(dormente: dormente)
     }
+    .modelContainer(container)
 }
 

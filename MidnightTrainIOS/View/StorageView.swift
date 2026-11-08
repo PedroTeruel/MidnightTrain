@@ -5,9 +5,10 @@
 //  Created by Pedro Henrique Hossaka Teruel on 07/11/26.
 //
 import SwiftUI
+import SwiftData
 
 struct StorageView: View {
-    @State private var dormentes = Dormente.exemplos
+    @Query(sort: \Dormente.id, order: .reverse) private var dormentes: [Dormente]
     @State private var busca = ""
     @State private var filtroStatus: Status?
     @StateObject private var nfcManager = NFCManager()
@@ -169,21 +170,12 @@ struct StorageView: View {
     }
     
     private func dormenteForTag(_ code: String) -> Dormente? {
-        let mapping: [String: String] = [
-            "DORMENTE-001": "147",
-            "DORMENTE-002": "146",
-            "DORMENTE-003": "145"
-        ]
-
-        guard let id = mapping[code] else {
-            return nil
-        }
-
-        return dormentes.first { $0.id == id }
+        dormentes.first { $0.codigoNFC == code }
     }
 
 }
 
 #Preview {
     StorageView()
+        .modelContainer(try! DormenteStore.makeContainer(inMemory: true))
 }

@@ -5,6 +5,7 @@
 //  Created by Pedro Henrique Hossaka Teruel on 07/11/26.
 //
 import SwiftUI
+import SwiftData
 
 struct DormenteMenu: View {
     let dormentes: [Dormente]
@@ -113,10 +114,13 @@ struct DormenteMenu: View {
 }
 
 #Preview {
+    let container = try! DormenteStore.makeContainer(inMemory: true)
+    let dormentes = try! container.mainContext.fetch(FetchDescriptor<Dormente>())
     NavigationStack {
-        DormenteMenu(dormentes: Dormente.exemplos)
+        DormenteMenu(dormentes: dormentes)
             .padding()
     }
+    .modelContainer(container)
 }
 //
 //struct DormenteMenu: View {
