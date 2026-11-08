@@ -9,6 +9,7 @@ import SwiftUI
 
 struct NFCScanButton: View {
     @ObservedObject var nfcManager: NFCManager
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         Button{
             nfcManager.startReading()
