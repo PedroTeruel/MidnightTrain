@@ -11,7 +11,7 @@ import SwiftUI
 struct MidnightTrainIOSApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            StorageView()
         }
     }
 }
