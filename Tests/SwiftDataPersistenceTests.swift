@@ -19,16 +19,28 @@ struct SwiftDataPersistenceTests {
 
         if phase == "write" {
             precondition(record.codigoNFC == "DORMENTE-001")
-            record.codigoNFC = "TAG-TESTE"
-            record.nome = "Dormente de teste"
-            record.lote = "Lote 42"
-            record.setor = "C"
-            record.patio = "Pátio B"
-            record.status = .refused
-            record.condicao = "Ruim"
-            record.tamanho = "250 × 25 × 17 cm"
-            record.especie = "Eucalipto"
-            record.descricao = "Fissura na extremidade; revisão necessária."
+            let original = DormenteEdicao(dormente: record)
+            var draft = original
+            draft.nome = "   "
+            precondition(!draft.isValid, "Whitespace-only required fields must be invalid")
+            precondition(DormenteEdicao(dormente: record) == original, "Draft edits must not mutate the model")
+            // Discarding a draft must leave all persisted values unchanged.
+            draft = original
+            draft.codigoNFC = "TAG-TESTE"
+            draft.nome = "Dormente de teste"
+            draft.lote = "Lote 42"
+            draft.setor = "C"
+            draft.patio = "Pátio B"
+            draft.status = .refused
+            draft.condicao = "Ruim"
+            draft.tamanho = "250 × 25 × 17 cm"
+            draft.especie = "Eucalipto"
+            draft.descricao = "Fissura na extremidade; revisão necessária."
+            precondition(draft.isValid)
+            precondition(DormenteEdicao(dormente: record) == original)
+            draft.apply(to: record)
+            precondition(DormenteEdicao(dormente: record) == draft)
+            print("PASS: draft isolation, discard, validation and applying all editable fields")
             record.ultimaAtualizacao = Date(timeIntervalSince1970: 1_800_000_000)
             try context.save()
             try DormenteStore.seedIfNeeded(in: context)
