@@ -6,6 +6,7 @@ trap 'rm -rf "$test_dir"' EXIT
 xcrun swiftc -parse-as-library \
     MidnightTrainIOS/Model/Dormente.swift \
     MidnightTrainIOS/Model/DormenteStore.swift \
+    MidnightTrainIOS/Model/DormenteEdicao.swift \
     Tests/SwiftDataPersistenceTests.swift \
     -o "$test_dir/persistence-tests"
 "$test_dir/persistence-tests" write "$test_dir/dormentes.store"

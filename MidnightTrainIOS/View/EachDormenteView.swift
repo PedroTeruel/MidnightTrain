@@ -18,6 +18,7 @@ struct EachDormenteView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var campoEmEdicao: Campo?
+    @State private var showingEditor = false
 
     private enum Campo: String, Identifiable {
         case status = "Decisão"
@@ -146,9 +147,10 @@ struct EachDormenteView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
             Button {
-                campoEmEdicao = .condicao
+                salvar()
+                if saveError == nil { dismiss() }
             } label: {
-                Text("Iniciar inspeção")
+                Text("Salvar")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -177,7 +179,18 @@ struct EachDormenteView: View {
         } message: {
             Text(saveError ?? "")
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle(dormente.nome)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Editar") { showingEditor = true }
+                    .accessibilityHint("Edita os dados do dormente")
+            }
+        }
+        .sheet(isPresented: $showingEditor) {
+            DormenteEditSheet(dormente: dormente)
+        }
         .sheet(item: $campoEmEdicao) { campo in
             NavigationStack {
                 Form {
@@ -227,29 +240,11 @@ struct EachDormenteView: View {
     }
 
     private var cabecalho: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .frame(width: 44, height: 44)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Circle())
-                }
-                .accessibilityLabel("Voltar")
-
-                Spacer()
-            }
-
-            Text(dormente.nome)
-                .font(.largeTitle.bold())
-                .multilineTextAlignment(.center)
-                .accessibilityAddTraits(.isHeader)
-                .frame(maxWidth: .infinity)
-        }
+        Text(dormente.nome)
+            .font(.largeTitle.bold())
+            .multilineTextAlignment(.center)
+            .accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity)
     }
 
     private func secao<Conteudo: View>(
