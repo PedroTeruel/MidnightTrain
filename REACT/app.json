@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "MidnightTrain",
+    "slug": "midnighttrain-react",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "PedroTeruel.MidnightTrainReact",
+      "infoPlist": {
+        "NFCReaderUsageDescription": "Usamos o NFC para associar etiquetas aos lotes e identificá-los no estoque."
+      }
+    },
+    "android": {
+      "package": "com.pedroteruel.midnighttrainreact",
+      "permissions": [
+        "android.permission.NFC"
+      ]
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "react-native-nfc-manager",
+        {
+          "nfcPermission": "Usamos o NFC para associar etiquetas aos lotes e identificá-los no estoque.",
+          "includeNdefEntitlement": false
+        }
+      ]
+    ]
+  }
+}
