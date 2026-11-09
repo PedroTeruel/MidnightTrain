@@ -21,7 +21,6 @@ struct EachDormenteView: View {
     @State private var showingEditor = false
 
     private enum Campo: String, Identifiable {
-        case status = "Decisão"
         case condicao = "Condição"
         case tamanho = "Tamanho"
         case especie = "Espécie"
@@ -37,14 +36,14 @@ struct EachDormenteView: View {
                 secao("IDENTIFICAÇÃO") {
                     cartao {
                         linha("Lote") {
-                            Text(dormente.lote)
+                            Text(dormente.loteRegistro?.id ?? dormente.lote)
                                 .foregroundStyle(.secondary)
                         }
 
                         Divider()
 
                         linha("Local") {
-                            Text("\(dormente.patio) - Setor \(dormente.setor)")
+                            Text(localDoDormente)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -66,28 +65,10 @@ struct EachDormenteView: View {
                         }
                         .buttonStyle(.plain)
 
-                        Divider()
-
-                        Button {
-                            campoEmEdicao = .status
-                        } label: {
-                            linha("Decisão") {
-                                Text(dormente.status.rawValue)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        corDoStatus.opacity(0.16),
-                                        in: RoundedRectangle(cornerRadius: 9)
-                                    )
-                            }
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
 
-                secao("DESCRIÇÃO") {
+                secao("CARACTERÍSTICAS") {
                     cartao {
                         Button {
                             campoEmEdicao = .tamanho
@@ -119,13 +100,6 @@ struct EachDormenteView: View {
                         }
                         .buttonStyle(.plain)
 
-                        Divider()
-
-                        linha("Descrição") {
-                            TextField("Adicionar", text: $dormente.descricao)
-                                .accessibilityLabel("Descrição")
-                                .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
-                        }
                     }
                 }
 
@@ -163,9 +137,8 @@ struct EachDormenteView: View {
             .background(Color(uiColor: .systemGroupedBackground))
         }
         .onChange(of: [
-            dormente.nome, dormente.lote, dormente.setor, dormente.patio, dormente.codigoNFC ?? "",
-            dormente.status.rawValue, dormente.condicao, dormente.tamanho,
-            dormente.especie, dormente.descricao
+            dormente.nome, dormente.condicao,
+            dormente.tamanho, dormente.especie
         ]) { _, _ in
             dormente.ultimaAtualizacao = .now
             salvar()
@@ -195,13 +168,6 @@ struct EachDormenteView: View {
             NavigationStack {
                 Form {
                     switch campo {
-                    case .status:
-                        Picker("Decisão", selection: $dormente.status) {
-                            ForEach(Status.allCases, id: \.self) { status in
-                                Text(status.rawValue).tag(status)
-                            }
-                        }
-
                     case .condicao:
                         Picker("Condição", selection: $dormente.condicao) {
                             Text("Não avaliada").tag("Não avaliada")
@@ -237,6 +203,12 @@ struct EachDormenteView: View {
         } catch {
             saveError = error.localizedDescription
         }
+    }
+
+    private var localDoDormente: String {
+        let patio = dormente.loteRegistro?.patio ?? dormente.patio
+        let setor = "Setor \(dormente.loteRegistro?.setor ?? dormente.setor)"
+        return patio.isEmpty ? setor : "\(patio) - \(setor)"
     }
 
     private var cabecalho: some View {
@@ -296,13 +268,6 @@ struct EachDormenteView: View {
         .contentShape(Rectangle())
     }
 
-    private var corDoStatus: Color {
-        switch dormente.status {
-        case .pending: .orange
-        case .approved: .green
-        case .refused: .red
-        }
-    }
 }
 
 #Preview {

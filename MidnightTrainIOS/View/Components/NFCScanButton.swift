@@ -20,7 +20,7 @@ struct NFCScanButton: View {
                     .fontWeight(.medium)
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityHidden(true)
-                Text("Identificar dormente")
+                Text("Identificar lote")
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .font(.body)

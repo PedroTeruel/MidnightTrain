@@ -11,7 +11,7 @@ import Combine
 
 class NFCManager: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate {
 
-    @Published var contentRead = "Nenhum dormente identificado"
+    @Published var contentRead = "Nenhum lote identificado"
     @Published var scannedCode: String?
     @Published var errorMessage: String?
 
@@ -34,7 +34,7 @@ class NFCManager: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate {
             invalidateAfterFirstRead: true
         )
         session?.alertMessage =
-            "Aproxime o iPhone da etiqueta NFC do dormente."
+            "Aproxime o iPhone da etiqueta NFC do lote."
         session?.begin()
     }
 
