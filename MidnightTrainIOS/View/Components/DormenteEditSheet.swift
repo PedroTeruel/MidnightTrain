@@ -31,24 +31,13 @@ struct DormenteEditSheet: View {
             Form {
                 Section {
                     campo("Nome", text: $draft.nome)
-                    campo("Lote", text: $draft.lote)
                 } header: {
                     Text("Identificação")
                 } footer: {
-                    Text("Nome, lote, pátio e setor são obrigatórios.")
-                }
-
-                Section("Local") {
-                    campo("Pátio", text: $draft.patio)
-                    campo("Setor", text: $draft.setor)
+                    Text("O nome é obrigatório.")
                 }
 
                 Section("Inspeção") {
-                    Picker("Decisão", selection: $draft.status) {
-                        ForEach(Status.allCases, id: \.self) { status in
-                            Text(status.rawValue).tag(status)
-                        }
-                    }
                     Picker("Condição", selection: $draft.condicao) {
                         ForEach(["Não avaliada", "Boa", "Atenção", "Ruim"], id: \.self) { value in
                             Text(value).tag(value)
@@ -56,25 +45,13 @@ struct DormenteEditSheet: View {
                     }
                 }
 
-                Section("Descrição") {
+                Section("Características") {
                     campo("Tamanho", text: $draft.tamanho)
                     campo("Espécie", text: $draft.especie)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Descrição").font(.subheadline).foregroundStyle(.secondary)
-                        TextField("Descrição", text: $draft.descricao, axis: .vertical)
-                            .lineLimit(3...8)
-                    }
+
                 }
 
-                Section {
-                    campo("Código da etiqueta", text: $draft.codigoNFC)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("NFC")
-                } footer: {
-                    Text("Informe o texto gravado na etiqueta NFC associada ao dormente.")
-                }
+
             }
             .navigationTitle("Editar dormente")
             .navigationBarTitleDisplayMode(.inline)
@@ -119,9 +96,9 @@ struct DormenteEditSheet: View {
         guard draft.isValid else { return }
         let previous = DormenteEdicao(dormente: dormente)
         let previousDate = dormente.ultimaAtualizacao
-        draft.apply(to: dormente)
-        if hasChanges { dormente.ultimaAtualizacao = .now }
         do {
+            draft.apply(to: dormente)
+            if hasChanges { dormente.ultimaAtualizacao = .now }
             try modelContext.save()
             dismiss()
         } catch {

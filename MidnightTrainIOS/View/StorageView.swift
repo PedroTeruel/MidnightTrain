@@ -8,28 +8,29 @@ import SwiftUI
 import SwiftData
 
 struct StorageView: View {
-    @Query(sort: \Dormente.id, order: .reverse) private var dormentes: [Dormente]
+    @Query(sort: \Lote.id) private var lotes: [Lote]
+    @State private var cadastroLote: CadastroLote?
     @State private var busca = ""
-    @State private var filtroStatus: Status?
+    @State private var filtroStatus: CondicaoLote?
     @StateObject private var nfcManager = NFCManager()
     
-    @State private var scannedDormenteID: String?
-    @State private var showUnknownDormenteAlert = false
+    @State private var loteIdentificado: Lote?
+    @State private var codigoNaoCadastrado: String?
+    @State private var etiquetaAmbigua = false
 
-    private var dormentesFiltrados: [Dormente] {
+    private struct CadastroLote: Identifiable {
+        let id = UUID()
+        var codigoNFC: String?
+    }
+
+    private var lotesFiltrados: [Lote] {
         let termo = busca.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return dormentes.filter { dormente in
-            let correspondeBusca =
-                termo.isEmpty ||
-                dormente.nome.localizedStandardContains(termo) ||
-                dormente.lote.localizedStandardContains(termo) ||
-                dormente.setor.localizedStandardContains(termo)
-
-            let correspondeStatus =
-                filtroStatus.map { dormente.status == $0 } ?? true
-
-            return correspondeBusca && correspondeStatus
+        return lotes.filter { lote in
+            let correspondeBusca = termo.isEmpty ||
+                [lote.id, lote.setor, lote.patio, lote.especies].contains {
+                    $0.localizedStandardContains(termo)
+                }
+            return correspondeBusca && (filtroStatus == nil || lote.condicao == filtroStatus)
         }
     }
 
@@ -39,13 +40,41 @@ struct StorageView: View {
                 VStack(spacing: 22) {
                     NFCScanButton(nfcManager: nfcManager)
 
-                    if dormentesFiltrados.isEmpty {
-                        Text("Nenhum dormente encontrado")
+                    if lotesFiltrados.isEmpty {
+                        Text("Nenhum lote encontrado")
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
                     } else {
-                        DormenteMenu(dormentes: dormentesFiltrados)
+                        ForEach(lotesFiltrados) { lote in
+                            NavigationLink {
+                                LoteView(lote: lote)
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "shippingbox")
+                                        .font(.title2)
+                                        .accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text("Lote \(lote.id)").font(.headline)
+                                        Text("Setor \(lote.setor) · \(lote.dormentes.count) dormentes")
+                                        Text(lote.condicao.rawValue).fontWeight(.medium)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right")
+                                        .font(.footnote.weight(.semibold))
+                                        .accessibilityHidden(true)
+                                }
+                                .foregroundStyle(.primary)
+                                .padding()
+                                .frame(minHeight: 44)
+                                .background(
+                                    Color(uiColor: .secondarySystemGroupedBackground),
+                                    in: RoundedRectangle(cornerRadius: 20)
+                                )
+                                .shadow(color: .black.opacity(0.12), radius: 14, y: 7)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -57,37 +86,29 @@ struct StorageView: View {
             }
             .navigationTitle("Estoque")
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(item: $scannedDormenteID) { dormenteID in
-                if let dormente = dormentes.first(where: { $0.id == dormenteID }) {
-                    EachDormenteView(dormente: dormente)
-                } else {
-                    ContentUnavailableView(
-                        "Dormente não encontrado",
-                        systemImage: "shippingbox"
-                    )
+            .navigationDestination(item: $loteIdentificado) { lote in
+                LoteView(lote: lote)
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Registrar lote", systemImage: "plus") { cadastroLote = CadastroLote() }
                 }
             }
-
-//            .toolbar {
-//                ToolbarItem(placement: .primaryAction) {
-//                    Button {
-//                        // Adicione aqui a ação de "Mais opções".
-//                    } label: {
-//                        Image(systemName: "ellipsis")
-//                    }
-//                    .accessibilityLabel("Mais opções")
-//                }
-//            }
+            .sheet(item: $cadastroLote) { cadastro in
+                LoteEditSheet(codigoNFCInicial: cadastro.codigoNFC)
+            }
         }
         .onChange(of: nfcManager.scannedCode) { _, newCode in
             guard let code = newCode else {
                 return
             }
 
-            if let dormente = dormenteForTag(code) {
-                scannedDormenteID = dormente.id
+            if let lote = Lote.identificado(por: code, em: lotes) {
+                loteIdentificado = lote
+            } else if lotes.contains(where: { $0.correspondeEtiqueta(code) }) {
+                etiquetaAmbigua = true
             } else {
-                showUnknownDormenteAlert = true
+                codigoNaoCadastrado = code
             }
         }
         .alert("Não foi possível ler a etiqueta", isPresented: Binding(
@@ -98,13 +119,19 @@ struct StorageView: View {
         } message: {
             Text(nfcManager.errorMessage ?? "")
         }
-        .alert(
-            "Dormente não encontrado",
-            isPresented: $showUnknownDormenteAlert
-        ) {
+        .alert("Etiqueta ainda sem lote", isPresented: Binding(
+            get: { codigoNaoCadastrado != nil },
+            set: { if !$0 { codigoNaoCadastrado = nil } }
+        ), presenting: codigoNaoCadastrado) { codigo in
+            Button("Registrar lote") { cadastroLote = CadastroLote(codigoNFC: codigo) }
+            Button("Cancelar", role: .cancel) {}
+        } message: { _ in
+            Text("Você pode registrar um lote e associar esta etiqueta a ele.")
+        }
+        .alert("Etiqueta associada a vários lotes", isPresented: $etiquetaAmbigua) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Não encontramos um dormente associado a esta tag NFC.")
+            Text("A etiqueta precisa estar associada a um único lote. Verifique o código em Editar lote.")
         }
     }
 
@@ -116,8 +143,8 @@ struct StorageView: View {
                     .accessibilityHidden(true)
                     .foregroundStyle(.primary)
 
-                TextField("Buscar lote ou setor", text: $busca)
-                    .accessibilityLabel("Buscar lote ou setor")
+                TextField("Buscar lote, setor ou espécie", text: $busca)
+                    .accessibilityLabel("Buscar lote, setor ou espécie")
                     .autocorrectionDisabled()
                     .submitLabel(.search)
             }
@@ -137,16 +164,8 @@ struct StorageView: View {
 
                 Divider()
 
-                Button("Pendente") {
-                    filtroStatus = .pending
-                }
-
-                Button("Aprovado") {
-                    filtroStatus = .approved
-                }
-
-                Button("Recusado") {
-                    filtroStatus = .refused
+                ForEach(CondicaoLote.allCases, id: \.self) { condicao in
+                    Button(condicao.rawValue) { filtroStatus = condicao }
                 }
             } label: {
                 Image(systemName: "line.3.horizontal.decrease")
@@ -160,7 +179,7 @@ struct StorageView: View {
                             .stroke(Color(uiColor: .separator), lineWidth: 1)
                     }
             }
-            .accessibilityLabel("Filtrar por status")
+            .accessibilityLabel("Filtrar lotes por condição")
             .accessibilityValue(filtroStatus?.rawValue ?? "Todos")
         }
         .padding(.horizontal, 20)
@@ -169,9 +188,6 @@ struct StorageView: View {
         .background(Color(uiColor: .systemBackground))
     }
     
-    private func dormenteForTag(_ code: String) -> Dormente? {
-        dormentes.first { $0.codigoNFC == code }
-    }
 
 }
 

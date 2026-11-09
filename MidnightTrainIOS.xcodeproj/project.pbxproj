@@ -252,7 +252,7 @@
 				DEVELOPMENT_TEAM = G4P28UKJSG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NFCReaderUsageDescription = "Usamos o NFC para identificar a etiqueta do dormente e abrir sua inspeção.";
+				INFOPLIST_KEY_NFCReaderUsageDescription = "Usamos o NFC para associar etiquetas aos lotes e identificá-los no estoque.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -287,7 +287,7 @@
 				DEVELOPMENT_TEAM = G4P28UKJSG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NFCReaderUsageDescription = "Usamos o NFC para identificar a etiqueta do dormente e abrir sua inspeção.";
+				INFOPLIST_KEY_NFCReaderUsageDescription = "Usamos o NFC para associar etiquetas aos lotes e identificá-los no estoque.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
