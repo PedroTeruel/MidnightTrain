@@ -6,17 +6,19 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct EachDormenteView: View {
-    let dormente: Dormente
+    @Bindable var dormente: Dormente
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var saveError: String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    @State private var condicao = "Não avaliada"
-    @State private var tamanho = "32x29m"
-    @State private var especie = "Araucária"
-    @State private var descricao = ""
     @State private var campoEmEdicao: Campo?
+    @State private var showingEditor = false
 
     private enum Campo: String, Identifiable {
         case condicao = "Condição"
@@ -34,14 +36,14 @@ struct EachDormenteView: View {
                 secao("IDENTIFICAÇÃO") {
                     cartao {
                         linha("Lote") {
-                            Text(dormente.lote)
+                            Text(dormente.loteRegistro?.id ?? dormente.lote)
                                 .foregroundStyle(.secondary)
                         }
 
                         Divider()
 
                         linha("Local") {
-                            Text("Pátio A - Setor \(dormente.setor)")
+                            Text(localDoDormente)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -53,41 +55,30 @@ struct EachDormenteView: View {
                             campoEmEdicao = .condicao
                         } label: {
                             linha("Condição") {
-                                Text(condicao)
+                                Text(dormente.condicao)
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
+                                    .accessibilityHidden(true)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         .buttonStyle(.plain)
 
-                        Divider()
-
-                        linha("Decisão") {
-                            Text(dormente.status.rawValue)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(corDoStatus)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    corDoStatus.opacity(0.16),
-                                    in: RoundedRectangle(cornerRadius: 9)
-                                )
-                        }
                     }
                 }
 
-                secao("DESCRIÇÃO") {
+                secao("CARACTERÍSTICAS") {
                     cartao {
                         Button {
                             campoEmEdicao = .tamanho
                         } label: {
                             linha("Tamanho") {
-                                Text(tamanho)
+                                Text(dormente.tamanho)
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
+                                    .accessibilityHidden(true)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -99,31 +90,29 @@ struct EachDormenteView: View {
                             campoEmEdicao = .especie
                         } label: {
                             linha("Espécie") {
-                                Text(especie)
+                                Text(dormente.especie)
                                     .foregroundStyle(.secondary)
 
                                 Image(systemName: "chevron.right")
+                                    .accessibilityHidden(true)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         .buttonStyle(.plain)
 
-                        Divider()
-
-                        linha("Descrição") {
-                            TextField("Adicionar", text: $descricao)
-                                .multilineTextAlignment(.trailing)
-                        }
                     }
                 }
 
-                HStack {
+                (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout())) {
                     Text("Última atualização:")
-                    Spacer()
-                    Text("Hoje, 08:45")
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Spacer()
+                    }
+                    Text(dormente.ultimaAtualizacao, format: .dateTime.day().month().year().hour().minute())
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -132,26 +121,55 @@ struct EachDormenteView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
             Button {
-                campoEmEdicao = .condicao
+                salvar()
+                if saveError == nil { dismiss() }
             } label: {
-                Text("Iniciar inspeção")
+                Text("Salvar")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(.blue, in: Capsule())
+                    .padding(.vertical, 15)
+                    .frame(minHeight: 54)
+                    .background(Color(red: 0, green: 0.32, blue: 0.76), in: Capsule())
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
             .background(Color(uiColor: .systemGroupedBackground))
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: [
+            dormente.nome, dormente.condicao,
+            dormente.tamanho, dormente.especie
+        ]) { _, _ in
+            dormente.ultimaAtualizacao = .now
+            salvar()
+        }
+        .alert("Não foi possível salvar", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("Tentar novamente") { salvar() }
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
+        .navigationTitle(dormente.nome)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Editar") { showingEditor = true }
+                    .accessibilityHint("Edita os dados do dormente")
+            }
+        }
+        .sheet(isPresented: $showingEditor) {
+            DormenteEditSheet(dormente: dormente)
+        }
         .sheet(item: $campoEmEdicao) { campo in
             NavigationStack {
                 Form {
                     switch campo {
                     case .condicao:
-                        Picker("Condição", selection: $condicao) {
+                        Picker("Condição", selection: $dormente.condicao) {
                             Text("Não avaliada").tag("Não avaliada")
                             Text("Boa").tag("Boa")
                             Text("Atenção").tag("Atenção")
@@ -159,10 +177,10 @@ struct EachDormenteView: View {
                         }
 
                     case .tamanho:
-                        TextField("Tamanho", text: $tamanho)
+                        TextField("Tamanho", text: $dormente.tamanho)
 
                     case .especie:
-                        TextField("Espécie", text: $especie)
+                        TextField("Espécie", text: $dormente.especie)
                     }
                 }
                 .navigationTitle(campo.rawValue)
@@ -178,27 +196,27 @@ struct EachDormenteView: View {
         }
     }
 
-    private var cabecalho: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.65), in: Circle())
-                }
-                .accessibilityLabel("Voltar")
-
-                Spacer()
-            }
-
-            Text(dormente.nome)
-                .font(.system(size: 30, weight: .bold))
-                .frame(maxWidth: .infinity)
+    private func salvar() {
+        do {
+            try modelContext.save()
+            saveError = nil
+        } catch {
+            saveError = error.localizedDescription
         }
+    }
+
+    private var localDoDormente: String {
+        let patio = dormente.loteRegistro?.patio ?? dormente.patio
+        let setor = "Setor \(dormente.loteRegistro?.setor ?? dormente.setor)"
+        return patio.isEmpty ? setor : "\(patio) - \(setor)"
+    }
+
+    private var cabecalho: some View {
+        Text(dormente.nome)
+            .font(.largeTitle.bold())
+            .multilineTextAlignment(.center)
+            .accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity)
     }
 
     private func secao<Conteudo: View>(
@@ -208,6 +226,7 @@ struct EachDormenteView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(titulo)
                 .font(.caption.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
                 .foregroundStyle(.secondary)
 
             conteudo()
@@ -232,30 +251,31 @@ struct EachDormenteView: View {
         _ titulo: String,
         @ViewBuilder conteudo: () -> Conteudo
     ) -> some View {
-        HStack(spacing: 8) {
+        (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
             Text(titulo)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
 
-            Spacer(minLength: 8)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer(minLength: 8)
+            }
 
             conteudo()
         }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: 48)
         .contentShape(Rectangle())
     }
 
-    private var corDoStatus: Color {
-        switch dormente.status {
-        case .pending: .orange
-        case .approved: .green
-        case .refused: .red
-        }
-    }
 }
 
 #Preview {
+    let container = try! DormenteStore.makeContainer(inMemory: true)
+    let dormente = try! container.mainContext.fetch(FetchDescriptor<Dormente>())[0]
     NavigationStack {
-        EachDormenteView(dormente: Dormente.exemplos[0])
+        EachDormenteView(dormente: dormente)
     }
+    .modelContainer(container)
 }
+

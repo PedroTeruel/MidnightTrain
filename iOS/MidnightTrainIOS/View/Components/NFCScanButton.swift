@@ -8,25 +8,31 @@
 import SwiftUI
 
 struct NFCScanButton: View {
-    @StateObject private var nfcManager = NFCManager()
+    @ObservedObject var nfcManager: NFCManager
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         Button{
             nfcManager.startReading()
         } label: {
-            HStack {
+            (dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout())) {
                 Image(systemName: "sensor.tag.radiowaves.forward.fill")
                     .font(.body)
                     .fontWeight(.medium)
-                Text("Identificar dormente")
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityHidden(true)
+                Text("Identificar lote")
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .font(.body)
                     .fontWeight(.medium)
             }
             .foregroundColor(.white)
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .padding(.vertical, 14)
+            .frame(minHeight: 52)
             .background(
-                Color(.blue),
+                Color(red: 0, green: 0.32, blue: 0.76),
                 in: Capsule()
             )
             .shadow(
@@ -40,5 +46,5 @@ struct NFCScanButton: View {
 }
 
 #Preview {
-    NFCScanButton()
+    NFCScanButton(nfcManager: NFCManager())
 }
