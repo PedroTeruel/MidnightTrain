@@ -140,3 +140,24 @@ O audit do npm sinalizou avisos nas dependências transitivas, incluindo ferrame
 O app React Native tem seu próprio banco. O SwiftData existente permanece no app Swift. A carga inicial usa os mesmos registros de exemplo e códigos legados, e não importa dados particulares de uma instalação anterior. Para substituir o app publicado com retenção desses registros, é necessário exportar os dados com os modelos SwiftData existentes e importá-los no SQLite antes de distribuir a substituição.
 
 Referências: [SQLite no Expo](https://docs.expo.dev/versions/v56.0.0/sdk/sqlite/), [builds de desenvolvimento](https://docs.expo.dev/develop/development-builds/introduction/) e [react-native-nfc-manager](https://github.com/revtel/react-native-nfc-manager).
+
+## 9. Dashboard, perfis e novas tabelas (`feat/dashboard`)
+
+O banco passou para a versão 2 (migração automática, preserva os dados existentes):
+
+| Tabela / coluna | Uso |
+|---|---|
+| `movimentacoes` | Entrada, saída e movimentação interna (RF04–RF06), com prazo e conclusão |
+| `buscas` | Tempo de localização: do início da busca até abrir o dormente |
+| `historico_condicao` | Histórico de mudanças de condição (RF07) |
+| `preferencias` | Ordem e widgets ligados do dashboard |
+| `dormentes.extraviadoEm`, `criadoEm`, `patio`, `setor`, `saidaEm` | Extravio, local próprio do dormente e saída do estoque |
+| views `dormentes_loc` e `dormentes_estoque` | Local atual (pátio/setor do dormente ou do lote) e só o que está em estoque |
+
+O login e os perfis são de outra frente: não há tabela de usuários aqui. As colunas `usuarioId` de `movimentacoes`, `buscas` e `historico_condicao` ficam nulas até existir login, e o acesso ao dashboard passa por `podeVerDashboard` em `src/models/permissoes.mjs` (hoje livre). Quando o login existir, é só decidir a regra nesse arquivo e passar o `usuario` em `src/sessao.js`.
+
+Telas: o ícone do dashboard fica na tela Estoque (e as telas Dashboard e Dormentes consultam `podeVerDashboard`). O cadastro de lote gera as entradas de estoque. A tela do dormente permite registrar e concluir movimentações e marcar extravio. A lista de Dormentes mede o tempo de localização quando o usuário digita uma busca e abre o resultado.
+
+O dashboard usa consultas agregadas (`src/models/dashboard.mjs`), sem carregar o estoque na memória. Os números atualizam ao voltar para a tela e ao puxar para baixo. As variações ▲▼ comparam com o período anterior de mesma duração; para Avaliados e Perdas (valores acumulados) comparam com o início do período.
+
+Limites conhecidos: a exportação compartilha o relatório em texto (PDF exige `expo-print`); os dados são locais ao aparelho, então a versão de PC exige servidor ou sincronização; a rosca e os gráficos são feitos com Views, sem módulo nativo novo; a interface só foi validada por lint e bundle, não em aparelho.

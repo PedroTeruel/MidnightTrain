@@ -6,6 +6,7 @@ import { openDatabaseAsync } from 'expo-sqlite';
 import { carregarEstoque, inicializarBanco, salvarDormente, salvarLote } from './src/models/banco.mjs';
 import EstoqueNavigation from './src/navigation/EstoqueNavigation';
 import { Acao, azul, Texto, Titulo } from './src/views/components/Interface';
+import { SessaoContext } from './src/sessao';
 
 const temaClaro = {
   ...DefaultTheme,
@@ -60,12 +61,17 @@ export default function App() {
     setLotes(await carregarEstoque(db));
   }
 
+  const recarregar = async () => setLotes(await carregarEstoque(db));
+  const sessao = { db, usuario: null, recarregar };
+
   return (
     <SafeAreaProvider>
       <KeyboardAvoidingView style={styles.tela} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <NavigationContainer theme={tema}>
           {db ? (
-            <EstoqueNavigation lotes={lotes} onSalvarLote={gravarLote} onSalvarDormente={gravarDormente} />
+            <SessaoContext.Provider value={sessao}>
+              <EstoqueNavigation lotes={lotes} onSalvarLote={gravarLote} onSalvarDormente={gravarDormente} />
+            </SessaoContext.Provider>
           ) : (
             <SafeAreaView style={[styles.carregando, { backgroundColor: tema.colors.background }]}>
               {erro ? (

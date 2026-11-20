@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import StorageView from '../views/screens/StorageView';
 import LoteView from '../views/screens/LoteView';
 import EachDormenteView from '../views/screens/EachDormenteView';
+import DormentesView from '../views/screens/DormentesView';
+import DashboardView from '../views/dashboard/DashboardView';
 
 const Stack = createNativeStackNavigator();
 
@@ -13,6 +15,8 @@ export default function EstoqueNavigation({ lotes, onSalvarLote, onSalvarDorment
       <Stack.Screen name="Estoque" options={{ headerLargeTitle: Platform.OS === 'ios' }}>
         {props => <StorageView {...props} lotes={lotes} onSalvarLote={onSalvarLote} />}
       </Stack.Screen>
+      <Stack.Screen name="Dashboard" component={DashboardView} />
+      <Stack.Screen name="Dormentes" component={DormentesView} />
       <Stack.Screen name="Lote">
         {props => <LoteView {...props} lote={lotes.find(lote => lote.chave === props.route.params.chave)}
           onSalvarLote={onSalvarLote} />}

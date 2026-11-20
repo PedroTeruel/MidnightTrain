@@ -7,9 +7,13 @@ import { condicoesLote, filtrarLotes, localizarEtiqueta } from '../../models/est
 import { IconeBotao, MenuOpcoes, Texto } from '../components/Interface';
 import LeituraNFC from '../components/LeituraNFC';
 import LoteEditSheet from '../components/LoteEditSheet';
+import { podeVerDashboard } from '../../models/permissoes.mjs';
+import { useSessao } from '../../sessao';
 
 export default function StorageView({ navigation, lotes, onSalvarLote }) {
   const { colors } = useTheme();
+  const { usuario } = useSessao();
+  const gerente = podeVerDashboard(usuario);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState('Todos');
   const [menu, setMenu] = useState(false);
@@ -19,10 +23,13 @@ export default function StorageView({ navigation, lotes, onSalvarLote }) {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <IconeBotao titulo="Registrar lote" icone="add" onPress={() => setCadastro({ codigo: '' })} />
+        <View style={styles.acoes}>
+          {gerente && <IconeBotao titulo="Abrir dashboard" icone="stats-chart-outline" onPress={() => navigation.navigate('Dashboard')} />}
+          <IconeBotao titulo="Registrar lote" icone="add" onPress={() => setCadastro({ codigo: '' })} />
+        </View>
       ),
     });
-  }, [navigation]);
+  }, [navigation, gerente]);
 
   function identificar(codigo) {
     const encontrados = localizarEtiqueta(lotes, codigo);
@@ -84,6 +91,7 @@ export default function StorageView({ navigation, lotes, onSalvarLote }) {
 
 const styles = StyleSheet.create({
   tela: { flex: 1 },
+  acoes: { flexDirection: 'row', alignItems: 'center' },
   lista: { padding: 16, gap: 18, paddingBottom: 24 },
   vazio: { alignItems: 'center', paddingVertical: 30 },
   lote: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, borderRadius: 20, minHeight: 48, shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 2 },

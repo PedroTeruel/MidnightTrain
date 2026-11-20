@@ -1,13 +1,18 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { condicoesDormente } from '../../models/estoque.mjs';
-import { Acao, Campo, Cartao, Formulario, Linha, Secao, Texto, Titulo, styles } from '../components/Interface';
+import { Acao, Campo, Cartao, Escolha, Formulario, Linha, Secao, Texto, Titulo, styles } from '../components/Interface';
+import { concluirMovimentacao, definirExtravio, movimentacaoPendente, registrarMovimentacao, tiposMovimentacao } from '../../models/operacoes.mjs';
+import { useSessao } from '../../sessao';
 import DormenteEditSheet from '../components/DormenteEditSheet';
 
 const titulos = { condicao: 'Condição', tamanho: 'Tamanho', especie: 'Espécie' };
 
 export default function EachDormenteView({ navigation, dormente, lote, onSalvarDormente }) {
+  const { db, usuario, recarregar } = useSessao();
+  const [pendente, setPendente] = useState(null);
+  const [movendo, setMovendo] = useState(false);
   const [editando, setEditando] = useState(false);
   const [campo, setCampo] = useState(null);
   const [valor, setValor] = useState('');
@@ -21,6 +26,21 @@ export default function EachDormenteView({ navigation, dormente, lote, onSalvarD
       headerRight: dormente ? () => <Acao titulo="Editar" onPress={() => setEditando(true)} /> : undefined,
     });
   }, [navigation, titulo, dormente]);
+
+  const carregarPendente = useCallback(() => {
+    if (dormente) movimentacaoPendente(db, dormente.id).then(setPendente).catch(() => setPendente(null));
+  }, [db, dormente]);
+  React.useEffect(carregarPendente, [carregarPendente]);
+
+  async function executar(operacao) {
+    try {
+      await operacao();
+      await recarregar();
+      carregarPendente();
+    } catch (erro) {
+      Alert.alert('Não foi possível concluir', erro.message);
+    }
+  }
 
   if (!dormente) return <View style={styles.conteudo}><Titulo>{titulo}</Titulo></View>;
 
@@ -73,13 +93,30 @@ export default function EachDormenteView({ navigation, dormente, lote, onSalvarD
     }
   }
 
-  const local = lote.patio ? `${lote.patio} - Setor ${lote.setor}` : `Setor ${lote.setor}`;
+  const patioAtual = dormente.patio ?? lote.patio, setorAtual = dormente.setor ?? lote.setor;
+  const local = patioAtual ? `${patioAtual} - Setor ${setorAtual}` : `Setor ${setorAtual}`;
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.tela}>
       <ScrollView contentContainerStyle={styles.conteudo}>
         <View style={estilos.centro}><Titulo>{titulo}</Titulo></View>
         <Secao titulo="IDENTIFICAÇÃO">
           <Cartao><Linha titulo="Lote" valor={lote.id} /><Linha titulo="Local" valor={local} /></Cartao>
+        </Secao>
+        <Secao titulo="MOVIMENTAÇÃO">
+          <Cartao>
+            {pendente ? (
+              <>
+                <Linha titulo={`${pendente.tipo} em andamento`} valor={pendente.destino} />
+                <Acao titulo="Concluir movimentação" icone="checkmark-circle-outline"
+                  onPress={() => executar(() => concluirMovimentacao(db, pendente.id))} />
+              </>
+            ) : (
+              <Acao titulo="Registrar movimentação" icone="swap-horizontal-outline" onPress={() => setMovendo(true)} />
+            )}
+            <Acao titulo={dormente.extraviadoEm ? 'Marcar como localizado' : 'Marcar como extraviado'}
+              icone={dormente.extraviadoEm ? 'checkmark-outline' : 'alert-circle-outline'}
+              onPress={() => executar(() => definirExtravio(db, dormente.id, !dormente.extraviadoEm))} />
+          </Cartao>
         </Secao>
         <Secao titulo="INSPEÇÃO">
           <Cartao><Linha titulo="Condição" valor={dormente.condicao} onPress={() => editar('condicao')} /></Cartao>
@@ -95,6 +132,8 @@ export default function EachDormenteView({ navigation, dormente, lote, onSalvarD
       <View style={estilos.rodape}>
         <Acao titulo="Salvar" destaque disabled={salvando} onPress={() => salvar({}, () => navigation.goBack())} />
       </View>
+      {movendo && <MovimentacaoSheet fechar={() => setMovendo(false)} local={{ patio: patioAtual, setor: setorAtual }}
+        onSalvar={dados => executar(() => registrarMovimentacao(db, { dormenteId: dormente.id, usuarioId: usuario?.id ?? null, ...dados }))} />}
       {editando && <DormenteEditSheet dormente={dormente} fechar={() => setEditando(false)} onSalvar={onSalvarDormente} />}
       {campo && (
         <Formulario titulo={titulos[campo]} fechar={concluirCampo} acao="OK" ocupado={salvando}
@@ -110,6 +149,24 @@ export default function EachDormenteView({ navigation, dormente, lote, onSalvarD
         </Formulario>
       )}
     </SafeAreaView>
+  );
+}
+
+function MovimentacaoSheet({ fechar, onSalvar, local }) {
+  const [tipo, setTipo] = useState('Interna');
+  const [patio, setPatio] = useState(local.patio ?? '');
+  const [setor, setSetor] = useState('');
+  const semDestino = tipo === 'Saída';
+  function confirmar() {
+    onSalvar({ tipo, patio, setor });
+    fechar();
+  }
+  return (
+    <Formulario titulo="Registrar movimentação" fechar={fechar} salvar={confirmar} acao="Registrar">
+      <Cartao><Escolha titulo="Tipo" opcoes={tiposMovimentacao.filter(t => t !== 'Entrada')} valor={tipo} aoEscolher={setTipo} /></Cartao>
+      {!semDestino && <Cartao><Campo titulo="Pátio de destino" valor={patio} onChangeText={setPatio} /><Campo titulo="Setor de destino" valor={setor} onChangeText={setSetor} /></Cartao>}
+      <Texto secundario>O dormente fica em andamento até você concluir a movimentação. O prazo previsto alimenta a eficiência operacional.</Texto>
+    </Formulario>
   );
 }
 
