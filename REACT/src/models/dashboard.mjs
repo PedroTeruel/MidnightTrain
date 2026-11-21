@@ -103,7 +103,7 @@ async function alertas(db, patio, agora) {
   if (extraviados) urgente.push({ chave: 'extraviados', titulo: 'Dormentes extraviados', n: extraviados,
     detalhe: juntarLotes(await lotesDe(' AND extraviadoEm IS NOT NULL')), filtro: { cond: 'extraviados' } });
   const ruins = await contar(" AND condicao = 'Ruim'");
-  if (ruins) urgente.push({ chave: 'ruim', titulo: 'Dormentes em condição Ruim', n: ruins,
+  if (ruins) urgente.push({ chave: 'ruim', titulo: 'Dormentes em condição ruim', n: ruins,
     detalhe: juntarLotes(await lotesDe(" AND condicao = 'Ruim'")), filtro: { cond: 'ruim' } });
   const parados = await contar(' AND ultimaAtualizacao < ?', limite30);
   if (parados) revisar.push({ chave: 'parados', titulo: 'Sem atualização há +30 dias', n: parados,

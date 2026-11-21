@@ -106,7 +106,7 @@ function MovimentacoesWidget({ dash }) {
 }
 
 const rotuloCurto = { 'Não avaliada': 'Não aval.' };
-const rotuloResumo = { 'Não avaliada': 'não avaliados', Boa: 'em condição Boa', 'Atenção': 'em condição Atenção', Ruim: 'em condição Ruim' };
+const rotuloResumo = { 'Não avaliada': 'não avaliados', Boa: 'em condição boa', 'Atenção': 'em condição atenção', Ruim: 'em condição ruim' };
 
 function CondicaoPorLoteWidget({ dash, ir }) {
   const { colors } = useTheme();
@@ -141,7 +141,7 @@ function CondicaoPorLoteWidget({ dash, ir }) {
       {linhas.length === 0 && <Text style={[estilos.sub, { color: colors.secondaryText }]}>Nenhum lote com dormentes.</Text>}
       <View style={{ gap: 14 }}>
         {linhas.map(l => (
-          <Pressable key={l.chave} accessibilityRole="button" accessibilityLabel={`Lote ${l.id}, ${l.aprovacao}, ${l[cond]} de ${l.total}`}
+          <Pressable key={l.chave} accessibilityRole="button" accessibilityLabel={`Lote ${l.id}, ${l.aprovacao.toLowerCase()}, ${l[cond]} de ${l.total}`}
             onPress={() => ir({ cond: filtro, lote: l.chave })} style={estilos.linhaLote}>
             <View style={estilos.loteNome}>
               <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Lote {l.id}</Text>

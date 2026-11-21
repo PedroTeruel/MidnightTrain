@@ -1,5 +1,5 @@
-import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Animated, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePaleta } from './cores';
@@ -154,11 +154,26 @@ export function ItemPopover({ icone, texto, marcado, aoPressionar }) {
 export function FolhaInferior({ titulo, subtitulo, aoFechar, altura, rodape, children }) {
   const { colors } = useTheme();
   const paleta = usePaleta();
+  const [arrasto] = useState(() => new Animated.Value(0));
+  // Arrastar a alça ou o título para baixo fecha a folha; soltar antes disso, ela volta.
+  const gesto = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+    onPanResponderMove: (_, g) => arrasto.setValue(Math.max(0, g.dy)),
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 90 || g.vy > 0.8) {
+        Animated.timing(arrasto, { toValue: 700, duration: 160, useNativeDriver: true }).start(() => aoFechar());
+      } else {
+        Animated.spring(arrasto, { toValue: 0, useNativeDriver: true }).start();
+      }
+    },
+    onPanResponderTerminate: () => Animated.spring(arrasto, { toValue: 0, useNativeDriver: true }).start(),
+  }), [arrasto, aoFechar]);
   return (
     <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={aoFechar}>
       <View style={estilos.folhaFundo}>
         <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={aoFechar} />
-        <View accessibilityViewIsModal style={[estilos.folha, { backgroundColor: colors.card }, altura ? { height: altura } : { maxHeight: '82%' }]}>
+        <Animated.View accessibilityViewIsModal style={[estilos.folha, { backgroundColor: colors.card, transform: [{ translateY: arrasto }] }, altura ? { height: altura } : { maxHeight: '82%' }]}>
+          <View {...gesto.panHandlers}>
           <View style={[estilos.folhaAlca, { backgroundColor: paleta.trilho }]} />
           <View style={estilos.folhaCabecalho}>
             <View style={{ flex: 1, gap: 2 }}>
@@ -169,9 +184,10 @@ export function FolhaInferior({ titulo, subtitulo, aoFechar, altura, rodape, chi
               <Ionicons name="close" size={26} color={colors.secondaryText} accessible={false} />
             </Pressable>
           </View>
+          </View>
           {children}
           {rodape}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

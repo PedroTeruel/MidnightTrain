@@ -210,8 +210,7 @@ function AlertasSheet({ alertas, fechar, abrir }) {
     </View>
   );
   return (
-    <FolhaInferior titulo="Alertas" aoFechar={fechar}
-      subtitulo={alertas.total ? `${alertas.total} ${alertas.total === 1 ? 'item pede' : 'itens pedem'} sua atenção` : undefined}>
+    <FolhaInferior titulo="Alertas" aoFechar={fechar}>
       <CorpoRolavel>
         {alertas.total === 0 && (
           <View style={estilos.vazio}>
@@ -239,7 +238,7 @@ function PersonalizarSheet({ layout, aoMudar, fechar }) {
   };
   const alternar = id => aoMudar({ ...layout, ocultos: layout.ocultos.includes(id) ? layout.ocultos.filter(x => x !== id) : [...layout.ocultos, id] });
   return (
-    <FolhaInferior titulo="Personalizar widgets" subtitulo="Ative, desative e mude a ordem" aoFechar={fechar} altura="86%"
+    <FolhaInferior titulo="Personalizar widgets" aoFechar={fechar} altura="86%"
       rodape={(
         <View style={[estilos.rodape, { borderTopColor: paleta.borda, backgroundColor: colors.card }]}>
           <Pressable accessibilityRole="button" onPress={() => aoMudar({ ordem: ORDEM_PADRAO, ocultos: OCULTOS_PADRAO })}
@@ -307,7 +306,7 @@ function ExportarSheet({ db, dash, fechar }) {
   }
 
   return (
-    <FolhaInferior titulo="Exportar relatório" subtitulo="Resumo em PDF dos indicadores" aoFechar={fechar} altura="90%"
+    <FolhaInferior titulo="Exportar relatório" aoFechar={fechar} altura="90%"
       rodape={(
         <View style={[estilos.rodape, { borderTopColor: paleta.borda, backgroundColor: colors.card, flexDirection: 'row', gap: 10 }]}>
           <Pressable accessibilityRole="button" disabled={ocupado} onPress={baixarPdf}
@@ -356,7 +355,6 @@ function ExportarSheet({ db, dash, fechar }) {
               <TituloPapel>{sec.titulo}</TituloPapel>
               {sec.linhas.map(l => (
                 <LinhaPapel key={l.nome}>
-                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: l.cor, marginRight: 6 }} />
                   <Text style={{ flex: 1, fontSize: 12, color: tinta }}>{l.nome}</Text>
                   <Text style={{ width: 40, textAlign: 'right', fontSize: 12, fontWeight: '700', color: tinta }}>{l.n}</Text>
                   {l.extra != null && <Text style={{ width: 44, textAlign: 'right', fontSize: 12, color: suave }}>{l.extra}</Text>}

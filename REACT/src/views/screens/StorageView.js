@@ -8,6 +8,7 @@ import { IconeBotao, MenuOpcoes, Texto } from '../components/Interface';
 import LeituraNFC from '../components/LeituraNFC';
 import LoteEditSheet from '../components/LoteEditSheet';
 import { podeVerDashboard } from '../../models/permissoes.mjs';
+import IconeDashboard from '../dashboard/IconeDashboard';
 import { useSessao } from '../../sessao';
 
 export default function StorageView({ navigation, lotes, onSalvarLote }) {
@@ -24,7 +25,7 @@ export default function StorageView({ navigation, lotes, onSalvarLote }) {
     navigation.setOptions({
       headerRight: () => (
         <View style={styles.acoes}>
-          {gerente && <IconeBotao titulo="Abrir dashboard" icone="stats-chart-outline" onPress={() => navigation.navigate('Dashboard')} />}
+          {gerente && <IconeDashboard onPress={() => navigation.navigate('Dashboard')} />}
           <IconeBotao titulo="Registrar lote" icone="add" onPress={() => setCadastro({ codigo: '' })} />
         </View>
       ),
