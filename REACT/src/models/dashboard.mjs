@@ -82,6 +82,14 @@ function juntarLotes(lotes) {
   return `Lotes ${lotes.slice(0, -1).join(', ')} e ${lotes[lotes.length - 1]}`;
 }
 
+// Entrada não tem origem e saída não tem destino: nunca mostra "null".
+export function rotaDaMovimentacao({ tipo, origem, destino }) {
+  if (origem && destino) return `${origem} → ${destino}`;
+  if (origem) return `${origem} → fora do armazém`;
+  if (destino) return `${tipo === 'Entrada' ? 'Entrada em' : 'Para'} ${destino}`;
+  return tipo;
+}
+
 async function alertas(db, patio, agora) {
   const f = clausulaPatio(patio);
   const limite30 = iso(agora.getTime() - 30 * DIA);
@@ -169,7 +177,7 @@ export async function carregarDashboard(db, { patio = null, periodo = '7 dias', 
   const recentes = (await db.getAllAsync(
     `SELECT m.id, m.tipo, m.origem, m.destino, m.dataHora, d.nome FROM movimentacoes m
      JOIN dormentes_loc d ON d.id = m.dormenteId WHERE 1=1${fm.sql} ORDER BY m.dataHora DESC, m.rowid DESC LIMIT 5`,
-    ...fm.params)).map(m => ({ ...m, rota: `${m.origem} → ${m.destino}` }));
+    ...fm.params)).map(m => ({ ...m, rota: rotaDaMovimentacao(m) }));
 
   const porLote = await db.getAllAsync(
     `SELECT loteChave, loteId, patioAtual AS patio, aprovacao, condicao, COUNT(*) AS n

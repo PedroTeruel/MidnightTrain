@@ -154,6 +154,7 @@ function CondicaoPorLoteWidget({ dash, ir }) {
               <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{l[cond]}</Text>
               <Text style={{ fontSize: 12, color: colors.secondaryText }}> / {l.total}</Text>
             </Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} accessible={false} />
           </Pressable>
         ))}
       </View>
@@ -253,7 +254,7 @@ const estilos = StyleSheet.create({
   linhaLote: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   loteNome: { width: 74, gap: 1 },
   trilhoLote: { flex: 1, height: 12, borderRadius: 6, overflow: 'hidden', justifyContent: 'center' },
-  loteNumero: { width: 54, textAlign: 'right' },
+  loteNumero: { width: 50, textAlign: 'right' },
   verTodos: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   ponto: { width: 10, height: 10, borderRadius: 5 },
   kpiLinha: { flexDirection: 'row', alignItems: 'center', gap: 8 },

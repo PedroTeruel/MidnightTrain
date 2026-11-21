@@ -1,5 +1,7 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Switch, Text, View, useWindowDimensions } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -8,12 +10,26 @@ import { gerarDadosExemplo, removerDadosExemplo } from '../../models/exemplo.mjs
 import { podeVerDashboard } from '../../models/permissoes.mjs';
 import { gravarPreferencia, lerPreferencia } from '../../models/preferencias.mjs';
 import { useSessao } from '../../sessao';
-import { Acao, Cartao, Formulario, IconeBotao, Texto, Titulo } from '../components/Interface';
-import { ItemPopover, Popover } from './Pecas';
+import { Acao, IconeBotao, Texto, Titulo } from '../components/Interface';
+import { relatorioHtml, relatorioSecoes } from '../../models/relatorio.mjs';
+import { CorpoRolavel, FolhaInferior, ItemPopover, Popover } from './Pecas';
 import { usePaleta } from './cores';
 import { CATALOGO, ORDEM_PADRAO, OCULTOS_PADRAO, Renderizar, normalizarLayout } from './widgets';
 
 const nomeWidget = id => CATALOGO.find(w => w.id === id).nome;
+const TIPOS_WIDGET = { aval: 'Indicador', perd: 'Indicador', loc: 'Indicador', efi: 'Indicador', lotesk: 'Indicador', recentes: 'Lista' };
+const tipoWidget = id => TIPOS_WIDGET[id] ?? 'Gráfico';
+
+// Seta de ordem; fica apagada e inerte quando não há para onde mover.
+function SetaOrdem({ titulo, icone, desativado, onPress }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={titulo} accessibilityState={{ disabled: !!desativado }}
+      disabled={desativado} onPress={onPress} style={estilos.setaOrdem}>
+      <Ionicons name={icone} size={22} color={desativado ? colors.border : colors.primary} accessible={false} />
+    </Pressable>
+  );
+}
 const larguraWidget = id => CATALOGO.find(w => w.id === id).largura;
 
 export default function DashboardView({ navigation }) {
@@ -154,7 +170,6 @@ export default function DashboardView({ navigation }) {
       {painel === 'periodo' && (
         <Popover aoFechar={() => setPainel(null)} ancora={ancoraPeriodo} largura={Math.min(280, larguraTela - 32)}>
           {Object.keys(PERIODOS).map(nome => <ItemPopover key={nome} texto={nome} marcado={nome === periodo} aoPressionar={() => escolherPeriodo(nome)} />)}
-          <Text style={[estilos.notaPopover, { color: colors.secondaryText }]}>As variações ▲▼ comparam com o período anterior, de mesma duração.</Text>
         </Popover>
       )}
       {painel === 'menu' && (
@@ -165,92 +180,208 @@ export default function DashboardView({ navigation }) {
       {painel === 'alertas' && dash && <AlertasSheet alertas={dash.alertas} fechar={() => setPainel(null)}
         abrir={a => { setPainel(null); if (a.filtro) ir(a.filtro); else navigation.navigate('Estoque'); }} />}
       {painel === 'widgets' && <PersonalizarSheet layout={layout} aoMudar={salvarLayout} fechar={() => setPainel(null)} />}
-      {painel === 'exportar' && dash && <ExportarSheet dash={dash} fechar={() => setPainel(null)} />}
+      {painel === 'exportar' && dash && <ExportarSheet db={db} dash={dash} fechar={() => setPainel(null)} />}
     </SafeAreaView>
   );
 }
 
+const ICONES_ALERTA = { extraviados: 'close-circle-outline', ruim: 'warning-outline', parados: 'time-outline', pendentes: 'hourglass-outline', semnfc: 'radio-outline' };
+
 function AlertasSheet({ alertas, fechar, abrir }) {
   const { colors } = useTheme();
-  const grupo = (titulo, itens) => !!itens.length && (
+  const paleta = usePaleta();
+  const grupo = (titulo, itens, cor) => !!itens.length && (
     <View style={estilos.secao}>
       <Text accessibilityRole="header" style={[estilos.secaoTitulo, { color: colors.secondaryText }]}>{titulo}</Text>
-      <Cartao>
-        {itens.map(a => (
-          <Pressable key={a.chave} accessibilityRole="button" onPress={() => abrir(a)} style={[estilos.alerta, { borderBottomColor: colors.border }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{a.titulo}</Text>
-              <Text style={{ color: colors.secondaryText, fontSize: 13 }}>{a.detalhe}</Text>
-            </View>
-            <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{a.n}</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} accessible={false} />
-          </Pressable>
-        ))}
-      </Cartao>
+      {itens.map(a => (
+        <Pressable key={a.chave} accessibilityRole="button" accessibilityLabel={`${a.titulo}: ${a.n}`} onPress={() => abrir(a)}
+          style={[estilos.alerta, { backgroundColor: colors.background }]}>
+          <View style={[estilos.alertaIcone, { backgroundColor: cor.bg }]}>
+            <Ionicons name={ICONES_ALERTA[a.chave] ?? 'alert-circle-outline'} size={21} color={cor.fg} accessible={false} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{a.titulo}</Text>
+            <Text style={{ color: colors.secondaryText, fontSize: 13 }}>{a.detalhe}</Text>
+          </View>
+          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{a.n}</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} accessible={false} />
+        </Pressable>
+      ))}
     </View>
   );
   return (
-    <Formulario titulo="Atenção necessária" fechar={fechar}>
-      {alertas.total === 0 && <Texto secundario>Nada precisa de atenção agora.</Texto>}
-      {grupo('URGENTE', alertas.urgente)}
-      {grupo('PARA REVISAR', alertas.revisar)}
-    </Formulario>
+    <FolhaInferior titulo="Alertas" aoFechar={fechar}
+      subtitulo={alertas.total ? `${alertas.total} ${alertas.total === 1 ? 'item pede' : 'itens pedem'} sua atenção` : undefined}>
+      <CorpoRolavel>
+        {alertas.total === 0 && (
+          <View style={estilos.vazio}>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: '600' }}>Nada precisa de atenção</Text>
+            <Text style={{ color: colors.secondaryText, fontSize: 14, textAlign: 'center' }}>Os alertas aparecem aqui quando houver algo a revisar.</Text>
+          </View>
+        )}
+        {grupo('URGENTE', alertas.urgente, paleta.ruim)}
+        {grupo('REVISAR', alertas.revisar, paleta.aviso)}
+      </CorpoRolavel>
+    </FolhaInferior>
   );
 }
 
 function PersonalizarSheet({ layout, aoMudar, fechar }) {
   const { colors } = useTheme();
+  const paleta = usePaleta();
+  const ultimo = layout.ordem.length - 1;
   const mover = (id, passo) => {
     const i = layout.ordem.indexOf(id), j = i + passo;
-    if (j < 0 || j >= layout.ordem.length) return;
+    if (j < 0 || j > ultimo) return;
     const ordem = [...layout.ordem];
     [ordem[i], ordem[j]] = [ordem[j], ordem[i]];
     aoMudar({ ...layout, ordem });
   };
   const alternar = id => aoMudar({ ...layout, ocultos: layout.ocultos.includes(id) ? layout.ocultos.filter(x => x !== id) : [...layout.ocultos, id] });
   return (
-    <Formulario titulo="Personalizar widgets" fechar={fechar} salvar={fechar} acao="OK">
-      <Cartao>
-        {layout.ordem.map((id, i) => {
-          const ligado = !layout.ocultos.includes(id);
-          return (
-            <View key={id} style={[estilos.widgetLinha, { borderBottomColor: colors.border }]}>
-              <Pressable accessibilityRole="switch" accessibilityState={{ checked: ligado }} accessibilityLabel={nomeWidget(id)}
-                onPress={() => alternar(id)} style={estilos.widgetNome}>
-                <Ionicons name={ligado ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={ligado ? colors.primary : colors.secondaryText} accessible={false} />
-                <Text style={{ color: colors.text, fontSize: 16, flexShrink: 1 }}>{nomeWidget(id)}</Text>
-              </Pressable>
-              <IconeBotao titulo={`Mover ${nomeWidget(id)} para cima`} icone="chevron-up" onPress={() => mover(id, -1)} />
-              <IconeBotao titulo={`Mover ${nomeWidget(id)} para baixo`} icone="chevron-down" onPress={() => mover(id, 1)} />
-            </View>
-          );
-        })}
-      </Cartao>
-      <Acao titulo="Restaurar padrão" onPress={() => aoMudar({ ordem: ORDEM_PADRAO, ocultos: OCULTOS_PADRAO })} />
-    </Formulario>
+    <FolhaInferior titulo="Personalizar widgets" subtitulo="Ative, desative e mude a ordem" aoFechar={fechar} altura="86%"
+      rodape={(
+        <View style={[estilos.rodape, { borderTopColor: paleta.borda, backgroundColor: colors.card }]}>
+          <Pressable accessibilityRole="button" onPress={() => aoMudar({ ordem: ORDEM_PADRAO, ocultos: OCULTOS_PADRAO })}
+            style={[estilos.botaoSecundario, { backgroundColor: colors.background }]}>
+            <Text style={{ color: colors.primary, fontSize: 17, fontWeight: '600' }}>Restaurar padrão</Text>
+          </Pressable>
+        </View>
+      )}>
+      <CorpoRolavel>
+        <View style={{ gap: 8 }}>
+          {layout.ordem.map((id, i) => {
+            const ligado = !layout.ocultos.includes(id);
+            return (
+              <View key={id} style={[estilos.widgetLinha, { backgroundColor: colors.background, opacity: ligado ? 1 : 0.6 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{nomeWidget(id)}</Text>
+                  <Text style={{ color: colors.secondaryText, fontSize: 13 }}>{tipoWidget(id)}</Text>
+                </View>
+                <SetaOrdem titulo={`Mover ${nomeWidget(id)} para cima`} icone="chevron-up" desativado={i === 0} onPress={() => mover(id, -1)} />
+                <SetaOrdem titulo={`Mover ${nomeWidget(id)} para baixo`} icone="chevron-down" desativado={i === ultimo} onPress={() => mover(id, 1)} />
+                <Switch accessibilityLabel={nomeWidget(id)} value={ligado} onValueChange={() => alternar(id)}
+                  trackColor={{ false: paleta.trilho, true: colors.primary }} thumbColor="#fff" />
+              </View>
+            );
+          })}
+        </View>
+      </CorpoRolavel>
+    </FolhaInferior>
   );
 }
 
-function ExportarSheet({ dash, fechar }) {
+// Cores fixas: a folha do relatório é sempre branca, como o PDF.
+const tinta = '#1c1c1e', suave = '#55555c', linha = '#d8d8de';
+const TituloPapel = ({ children }) => <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.4, color: suave, marginBottom: 6 }}>{children}</Text>;
+const LinhaPapel = ({ children }) => <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: linha }}>{children}</View>;
+
+function ExportarSheet({ db, dash, fechar }) {
   const { colors } = useTheme();
-  const texto = relatorioTexto(dash);
+  const paleta = usePaleta();
+  const [periodoExp, setPeriodoExp] = useState(dash.periodo);
+  const [dados, setDados] = useState(dash);
+  const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState(null);
-  async function compartilhar() {
-    try { await Share.share({ title: 'Relatório MidnightTrain', message: texto }); setErro(null); }
+  const secoes = relatorioSecoes(dados);
+
+  const escolher = async nome => {
+    setPeriodoExp(nome);
+    try { setDados(await carregarDashboard(db, { patio: dash.patio, periodo: nome })); setErro(null); }
+    catch (falha) { setErro(falha.message); }
+  };
+  async function baixarPdf() {
+    setOcupado(true);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: relatorioHtml(dados) });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Relatório MidnightTrain' });
+        setErro(null);
+      } else setErro('Este aparelho não consegue compartilhar o arquivo.');
+    } catch (falha) { setErro(falha.message); }
+    setOcupado(false);
+  }
+  async function compartilharTexto() {
+    try { await Share.share({ title: 'Relatório MidnightTrain', message: relatorioTexto(dados) }); setErro(null); }
     catch (falha) { setErro(falha.message); }
   }
+
   return (
-    <Formulario titulo="Exportar relatório" fechar={fechar} salvar={compartilhar} acao="Compartilhar">
-      <Texto secundario>O relatório usa o pátio e o período escolhidos no dashboard.</Texto>
-      <Cartao><Text selectable style={{ color: colors.text, fontSize: 14, lineHeight: 21, paddingVertical: 10 }}>{texto}</Text></Cartao>
-      {erro && <Texto>{erro}</Texto>}
-    </Formulario>
+    <FolhaInferior titulo="Exportar relatório" subtitulo="Resumo em PDF dos indicadores" aoFechar={fechar} altura="90%"
+      rodape={(
+        <View style={[estilos.rodape, { borderTopColor: paleta.borda, backgroundColor: colors.card, flexDirection: 'row', gap: 10 }]}>
+          <Pressable accessibilityRole="button" disabled={ocupado} onPress={baixarPdf}
+            style={[estilos.botaoPrimario, { backgroundColor: colors.primary, opacity: ocupado ? 0.7 : 1 }]}>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '600' }}>{ocupado ? 'Gerando PDF…' : 'Baixar PDF'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Compartilhar como texto" onPress={compartilharTexto}
+            style={[estilos.botaoIcone, { backgroundColor: colors.background }]}>
+            <Ionicons name="share-outline" size={24} color={colors.primary} accessible={false} />
+          </Pressable>
+        </View>
+      )}>
+      <View accessibilityRole="tablist" style={[estilos.segmentosExp, { backgroundColor: paleta.trilho }]}>
+        {Object.keys(PERIODOS).map(nome => {
+          const sel = nome === periodoExp;
+          return (
+            <Pressable key={nome} accessibilityRole="tab" accessibilityState={{ selected: sel }} onPress={() => escolher(nome)}
+              style={[estilos.segmentoExp, sel && { backgroundColor: colors.card, elevation: 2 }]}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: sel ? colors.text : colors.secondaryText }}>{nome}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <CorpoRolavel fundo={colors.background}>
+        <View style={estilos.papel}>
+          <View style={{ borderBottomWidth: 2, borderBottomColor: tinta, paddingBottom: 12, gap: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', letterSpacing: 0.4, color: suave }}>{secoes.cabecalho.marca}</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: tinta }}>{secoes.cabecalho.titulo}</Text>
+            <Text style={{ fontSize: 12, color: suave }}>{secoes.cabecalho.sub}</Text>
+          </View>
+          <View>
+            <TituloPapel>{secoes.indicadores.titulo}</TituloPapel>
+            <View style={{ flexDirection: 'row', paddingBottom: 6 }}>
+              {secoes.indicadores.colunas.map((c, i) => <Text key={c} style={{ flex: i === 0 ? 1.5 : i === 1 ? 0.8 : 1, fontSize: 12, color: suave }}>{c}</Text>)}
+            </View>
+            {secoes.indicadores.linhas.map(l => (
+              <LinhaPapel key={l[0]}>
+                <Text style={{ flex: 1.5, fontSize: 12, fontWeight: '600', color: tinta }}>{l[0]}</Text>
+                <Text style={{ flex: 0.8, fontSize: 12, fontWeight: '700', color: tinta }}>{l[1]}</Text>
+                <Text style={{ flex: 1, fontSize: 12, color: tinta }}>{l[2]}</Text>
+              </LinhaPapel>
+            ))}
+          </View>
+          {[secoes.condicao, secoes.movimentacoes].map(sec => (
+            <View key={sec.titulo}>
+              <TituloPapel>{sec.titulo}</TituloPapel>
+              {sec.linhas.map(l => (
+                <LinhaPapel key={l.nome}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: l.cor, marginRight: 6 }} />
+                  <Text style={{ flex: 1, fontSize: 12, color: tinta }}>{l.nome}</Text>
+                  <Text style={{ width: 40, textAlign: 'right', fontSize: 12, fontWeight: '700', color: tinta }}>{l.n}</Text>
+                  {l.extra != null && <Text style={{ width: 44, textAlign: 'right', fontSize: 12, color: suave }}>{l.extra}</Text>}
+                </LinhaPapel>
+              ))}
+            </View>
+          ))}
+          <View>
+            <TituloPapel>{secoes.pendencias.titulo}</TituloPapel>
+            {secoes.pendencias.linhas.map(l => (
+              <LinhaPapel key={l.nome}>
+                <Text style={{ flex: 1, fontSize: 12, color: tinta }}>{l.nome}</Text>
+                <Text style={{ width: 32, textAlign: 'right', fontSize: 12, fontWeight: '700', color: tinta }}>{l.n}</Text>
+              </LinhaPapel>
+            ))}
+          </View>
+        </View>
+        {erro && <Text style={{ color: paleta.ruim.fg, fontSize: 14 }}>{erro}</Text>}
+      </CorpoRolavel>
+    </FolhaInferior>
   );
 }
 
 const estilos = StyleSheet.create({
   tela: { flex: 1 },
-  notaPopover: { fontSize: 13, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12, lineHeight: 18 },
   bloqueado: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
   cabecalhoAcoes: { flexDirection: 'row', alignItems: 'center' },
   selo: { position: 'absolute', top: 6, right: 4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
@@ -266,7 +397,16 @@ const estilos = StyleSheet.create({
   cheia: { width: '100%' },
   secao: { gap: 8 },
   secaoTitulo: { fontSize: 13, fontWeight: '600', paddingHorizontal: 4 },
-  alerta: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  widgetLinha: { flexDirection: 'row', alignItems: 'center', minHeight: 52, borderBottomWidth: StyleSheet.hairlineWidth },
-  widgetNome: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
+  alerta: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16 },
+  alertaIcone: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  setaOrdem: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  vazio: { alignItems: 'center', gap: 6, paddingVertical: 28, paddingHorizontal: 16 },
+  widgetLinha: { flexDirection: 'row', alignItems: 'center', minHeight: 60, paddingLeft: 16, paddingRight: 10, borderRadius: 16 },
+  rodape: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24, borderTopWidth: StyleSheet.hairlineWidth },
+  botaoSecundario: { minHeight: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  botaoPrimario: { flex: 1, minHeight: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  botaoIcone: { width: 50, minHeight: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  segmentosExp: { flexDirection: 'row', gap: 2, padding: 3, borderRadius: 10, marginHorizontal: 16, marginTop: 4, marginBottom: 8 },
+  segmentoExp: { flex: 1, minHeight: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  papel: { backgroundColor: '#ffffff', borderRadius: 6, paddingVertical: 20, paddingHorizontal: 18, gap: 18, elevation: 3, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8 },
 });

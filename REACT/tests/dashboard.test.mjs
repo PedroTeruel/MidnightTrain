@@ -236,3 +236,27 @@ test('dados de exemplo enchem o dashboard e podem ser removidos', async () => {
   const limpo = await carregarDashboard(db, { periodo: '4 semanas' });
   assert.equal(limpo.lotes.total, antes.lotes.total);
 });
+
+test('rota de movimentação nunca mostra "null"', async () => {
+  const { rotaDaMovimentacao } = await import('../src/models/dashboard.mjs');
+  assert.equal(rotaDaMovimentacao({ tipo: 'Interna', origem: 'A', destino: 'B' }), 'A → B');
+  assert.equal(rotaDaMovimentacao({ tipo: 'Saída', origem: 'Pátio A / B', destino: null }), 'Pátio A / B → fora do armazém');
+  assert.equal(rotaDaMovimentacao({ tipo: 'Entrada', origem: null, destino: 'Pátio A / A' }), 'Entrada em Pátio A / A');
+});
+
+test('relatório: seções e HTML do PDF refletem os dados do dashboard', async () => {
+  const { gerarDadosExemplo } = await import('../src/models/exemplo.mjs');
+  const { relatorioSecoes, relatorioHtml } = await import('../src/models/relatorio.mjs');
+  const db = abrirBanco();
+  await inicializarBanco(db);
+  await gerarDadosExemplo(db, new Date());
+  const dash = await carregarDashboard(db, { periodo: '4 semanas' });
+  const s = relatorioSecoes(dash);
+  assert.equal(s.indicadores.linhas.length, 4);
+  assert.equal(s.condicao.linhas.reduce((a, l) => a + l.n, 0), dash.total);
+  assert.match(s.movimentacoes.titulo, /nas últimas 4 semanas/);
+  const html = relatorioHtml(dash);
+  assert.match(html, /Relatório de indicadores/);
+  assert.match(html, /PENDÊNCIAS/);
+  assert.ok(!html.includes('null') && !html.includes('undefined'));
+});

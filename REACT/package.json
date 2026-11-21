@@ -20,6 +20,8 @@
     "expo": "~56.0.24",
     "expo-dev-client": "~56.0.28",
     "expo-font": "~56.0.7",
+    "expo-print": "~56.0.4",
+    "expo-sharing": "~56.0.27",
     "expo-sqlite": "~56.0.6",
     "expo-system-ui": "~56.0.5",
     "react": "19.2.3",

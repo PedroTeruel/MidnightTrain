@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePaleta } from './cores';
@@ -37,7 +37,10 @@ export function Kpi({ titulo, valor, variacao, boaQuandoSobe, sub, aoPressionar 
   return (
     <Pressable disabled={!aoPressionar} onPress={aoPressionar} accessibilityRole={aoPressionar ? 'button' : undefined}
       style={[estilos.kpi, { backgroundColor: colors.card }]}>
-      <Text style={[estilos.kpiTitulo, { color: colors.secondaryText }]}>{titulo}</Text>
+      <View style={estilos.kpiTopo}>
+        <Text style={[estilos.kpiTitulo, { color: colors.secondaryText }]}>{titulo}</Text>
+        {aoPressionar && <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} accessible={false} />}
+      </View>
       <View style={estilos.kpiLinha}>
         <Text style={[estilos.kpiValor, { color: colors.text }]}>{valor}</Text>
         <Delta valor={variacao} boaQuandoSobe={boaQuandoSobe} />
@@ -82,7 +85,10 @@ export function Colunas({ itens, aoPressionar, altura = 92 }) {
       </View>
       <View style={estilos.rotulos}>
         {itens.map(item => (
-          <Text key={item.nome} style={[estilos.rotulo, { color: colors.secondaryText }]}>{item.rotulo ?? item.nome}</Text>
+          <View key={item.nome} style={estilos.rotuloCaixa}>
+            <Text style={[estilos.rotulo, { color: colors.secondaryText }]}>{item.rotulo ?? item.nome}</Text>
+            {aoPressionar && <Ionicons name="chevron-forward" size={12} color={colors.secondaryText} accessible={false} />}
+          </View>
         ))}
       </View>
     </View>
@@ -144,6 +150,41 @@ export function ItemPopover({ icone, texto, marcado, aoPressionar }) {
   );
 }
 
+// Folha que sobe de baixo (bottom sheet): fundo escurecido, alça, título, subtítulo e fechar.
+export function FolhaInferior({ titulo, subtitulo, aoFechar, altura, rodape, children }) {
+  const { colors } = useTheme();
+  const paleta = usePaleta();
+  return (
+    <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={aoFechar}>
+      <View style={estilos.folhaFundo}>
+        <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={aoFechar} />
+        <View accessibilityViewIsModal style={[estilos.folha, { backgroundColor: colors.card }, altura ? { height: altura } : { maxHeight: '82%' }]}>
+          <View style={[estilos.folhaAlca, { backgroundColor: paleta.trilho }]} />
+          <View style={estilos.folhaCabecalho}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text accessibilityRole="header" style={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>{titulo}</Text>
+              {!!subtitulo && <Text style={{ color: colors.secondaryText, fontSize: 14 }}>{subtitulo}</Text>}
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Fechar" onPress={aoFechar} style={estilos.folhaFechar}>
+              <Ionicons name="close" size={26} color={colors.secondaryText} accessible={false} />
+            </Pressable>
+          </View>
+          {children}
+          {rodape}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+export function CorpoRolavel({ fundo, children }) {
+  return (
+    <ScrollView style={[estilos.corpoFolha, fundo && { backgroundColor: fundo }]} contentContainerStyle={estilos.corpoFolhaConteudo}>
+      {children}
+    </ScrollView>
+  );
+}
+
 export function Pilula({ texto, cor }) {
   return <View style={[estilos.pilula, { backgroundColor: cor.bg }]}><Text style={[estilos.pilulaTexto, { color: cor.fg }]}>{texto}</Text></View>;
 }
@@ -155,6 +196,7 @@ const estilos = StyleSheet.create({
   delta: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingLeft: 6, paddingRight: 8, borderRadius: 10 },
   deltaTexto: { fontSize: 12, fontWeight: '600' },
   kpi: { flexGrow: 1, flexBasis: '47%', borderRadius: 20, padding: 14, gap: 8 },
+  kpiTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   kpiTitulo: { fontSize: 13 },
   kpiLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   kpiValor: { fontSize: 28, fontWeight: '700' },
@@ -168,11 +210,19 @@ const estilos = StyleSheet.create({
   coluna: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   colunaNumero: { fontSize: 13, fontWeight: '600' },
   rotulos: { flexDirection: 'row', paddingTop: 6 },
-  rotulo: { flex: 1, textAlign: 'center', fontSize: 12 },
+  rotuloCaixa: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  rotulo: { textAlign: 'center', fontSize: 12, flexShrink: 1 },
   centroRosca: { alignItems: 'center', justifyContent: 'center' },
   popover: { position: 'absolute', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 6, elevation: 10, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
   itemPopover: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 48, paddingHorizontal: 18 },
   itemPopoverTexto: { flex: 1, fontSize: 16 },
+  folhaFundo: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  folha: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8, overflow: 'hidden' },
+  folhaAlca: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3 },
+  folhaCabecalho: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8, paddingBottom: 8, paddingLeft: 20, paddingRight: 8 },
+  folhaFechar: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  corpoFolha: { flexGrow: 0 },
+  corpoFolhaConteudo: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 28, gap: 16 },
   pilula: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 },
   pilulaTexto: { fontSize: 12, fontWeight: '600' },
 });
