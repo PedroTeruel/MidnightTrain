@@ -19,14 +19,14 @@
       ]
     },
     "plugins": [
-      "expo-sqlite",
       [
         "react-native-nfc-manager",
         {
           "nfcPermission": "Usamos o NFC para associar etiquetas aos lotes e identificá-los no estoque.",
           "includeNdefEntitlement": false
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

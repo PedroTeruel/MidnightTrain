@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import React, { useState } from 'react';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { openDatabaseAsync } from 'expo-sqlite';
-import { carregarEstoque, inicializarBanco, salvarDormente, salvarLote } from './src/models/banco.mjs';
 import EstoqueNavigation from './src/navigation/EstoqueNavigation';
-import { Acao, azul, Texto, Titulo } from './src/views/components/Interface';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, useColorScheme } from 'react-native';
+import LoginScreen from './src/views/screens/LoginScreen';
+import GestorScreen from './src/views/screens/GestorScreen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { autenticarDemo } from './src/services/auth';
+import {carregarEstoqueApi,salvarLoteApi,salvarDormenteApi, registrarEntradaApi, registrarTransferenciaApi, registrarSaidaApi,} from './src/services/estoqueApi';
+import { azul } from './src/views/components/Interface';
 
 const temaClaro = {
   ...DefaultTheme,
@@ -18,64 +20,128 @@ const temaEscuro = {
 
 export default function App() {
   const tema = useColorScheme() === 'dark' ? temaEscuro : temaClaro;
-  const [db, setDb] = useState(null);
+  const [usuario, setUsuario] = useState(null);
   const [lotes, setLotes] = useState([]);
-  const [erro, setErro] = useState(null);
-  const [tentativa, setTentativa] = useState(0);
-
-  useEffect(() => {
-    let ativo = true;
-    let banco;
-    async function abrir() {
-      try {
-        banco = await openDatabaseAsync('midnighttrain.db');
-        if (!ativo) {
-          await banco.closeAsync();
-          return;
-        }
-        await inicializarBanco(banco);
-        const registros = await carregarEstoque(banco);
-        if (ativo) {
-          setLotes(registros);
-          setDb(banco);
-        }
-      } catch (falha) {
-        if (ativo) setErro(falha.message);
-      }
-    }
-    abrir();
-    return () => {
-      ativo = false;
-      if (banco) banco.closeAsync().catch(() => {});
-    };
-  }, [tentativa]);
 
   async function gravarLote(draft, chave) {
-    await salvarLote(db, draft, chave);
-    setLotes(await carregarEstoque(db));
+  if (!usuario?.token) {
+    throw new Error('Sessão inválida. Faça login novamente.');
   }
+
+  const estoqueAtualizado = await salvarLoteApi(
+    draft,
+    lotes,
+    chave,
+    usuario.token
+  );
+
+  setLotes(estoqueAtualizado);
+}
 
   async function gravarDormente(id, draft) {
-    await salvarDormente(db, id, draft);
-    setLotes(await carregarEstoque(db));
+  if (!usuario?.token) {
+    throw new Error('Sessão inválida. Faça login novamente.');
   }
 
-  return (
+  const estoqueAtualizado = await salvarDormenteApi(
+    id,
+    draft,
+    usuario.token
+  );
+
+  setLotes(estoqueAtualizado);
+}
+
+async function registrarEntrada(id, localId) {
+  if (!usuario?.token) {
+    throw new Error('Sessão inválida. Faça login novamente.');
+  }
+
+  const estoqueAtualizado = await registrarEntradaApi(
+    id,
+    localId,
+    usuario.token
+  );
+
+  setLotes(estoqueAtualizado);
+}
+
+async function registrarTransferencia(id, destinoLocalId) {
+  if (!usuario?.token) {
+    throw new Error('Sessão inválida. Faça login novamente.');
+  }
+
+  const estoqueAtualizado = await registrarTransferenciaApi(
+    id,
+    destinoLocalId,
+    usuario.token
+  );
+
+  setLotes(estoqueAtualizado);
+}
+
+async function registrarSaida(id) {
+  if (!usuario?.token) {
+    throw new Error('Sessão inválida. Faça login novamente.');
+  }
+
+  const estoqueAtualizado = await registrarSaidaApi(
+    id,
+    usuario.token
+  );
+
+  setLotes(estoqueAtualizado);
+}
+
+  function abrirDashboard() {
+  Alert.alert(
+    'Dashboard em desenvolvimento',
+    'O painel de gerenciamento ainda não foi integrado.'
+  );
+}
+
+  async function entrar(email, senha) {
+  const conta = await autenticarDemo(email, senha);
+
+  if (conta.perfil === 'FUNCIONARIO') {
+    try {
+      const estoqueRemoto = await carregarEstoqueApi(conta.token);
+      setLotes(estoqueRemoto);
+    } catch (erro) {
+      Alert.alert('Erro ao carregar estoque', erro.message);
+      return;
+    }
+  }
+
+  setUsuario(conta);
+}
+
+   return (
     <SafeAreaProvider>
-      <KeyboardAvoidingView style={styles.tela} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={styles.tela}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <NavigationContainer theme={tema}>
-          {db ? (
-            <EstoqueNavigation lotes={lotes} onSalvarLote={gravarLote} onSalvarDormente={gravarDormente} />
+          {!usuario ? (
+            <LoginScreen onEntrar={entrar} />
+          ) : usuario.perfil !== 'FUNCIONARIO' ? (
+            <GestorScreen
+              usuario={usuario}
+              onAbrirDashboard={abrirDashboard}
+              onSair={() => setUsuario(null)}
+            />
           ) : (
-            <SafeAreaView style={[styles.carregando, { backgroundColor: tema.colors.background }]}>
-              {erro ? (
-                <View style={styles.conteudo}>
-                  <Titulo>Não foi possível abrir o estoque</Titulo>
-                  <Texto>{erro}</Texto>
-                  <Acao titulo="Tentar novamente" onPress={() => { setErro(null); setTentativa(tentativa + 1); }} />
-                </View>
-              ) : <ActivityIndicator accessibilityLabel="Carregando estoque" color={tema.colors.primary} />}
-            </SafeAreaView>
+            <EstoqueNavigation
+              lotes={lotes}
+              token={usuario.token}
+              onSalvarLote={gravarLote}
+              onSalvarDormente={gravarDormente}
+              onRegistrarEntrada={registrarEntrada}
+              onRegistrarTransferencia={registrarTransferencia}
+              onRegistrarSaida={registrarSaida}
+              onSair={() => setUsuario(null)}
+            />
           )}
         </NavigationContainer>
       </KeyboardAvoidingView>
@@ -85,6 +151,4 @@ export default function App() {
 
 const styles = StyleSheet.create({
   tela: { flex: 1 },
-  carregando: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  conteudo: { gap: 12 },
 });

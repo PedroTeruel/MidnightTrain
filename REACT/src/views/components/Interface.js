@@ -9,9 +9,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 export const azul = '#0052C2';
 
-export function Acao({ titulo, icone, onPress, disabled, destaque = false }) {
+export function Acao({ titulo, icone, onPress, disabled, destaque = false, perigo = false }) {
   const { colors } = useTheme();
-  const cor = destaque ? '#fff' : colors.primary;
+  const cor = destaque || perigo ? '#fff' : colors.primary;
   return (
     <Pressable
       accessibilityRole="button" accessibilityLabel={titulo} disabled={disabled}
@@ -20,6 +20,8 @@ export function Acao({ titulo, icone, onPress, disabled, destaque = false }) {
         styles.acao,
         destaque && { backgroundColor: azul, borderRadius: 32, paddingHorizontal: 20 },
         { opacity: disabled ? 0.45 : pressed ? 0.7 : 1 },
+        perigo && { backgroundColor: '#C62828', borderRadius: 32, paddingHorizontal: 20,
+},
       ]}
     >
       {icone && <Ionicons name={icone} size={20} color={cor} accessible={false} />}
