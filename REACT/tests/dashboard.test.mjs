@@ -219,3 +219,20 @@ test('preferências de widgets são gravadas', async () => {
   assert.deepEqual(await lerPreferencia(db, 'widgets'), { ordem: ['mov', 'cond'], ocultos: [] });
   assert.equal(await lerPreferencia(db, 'outra'), null);
 });
+
+test('dados de exemplo enchem o dashboard e podem ser removidos', async () => {
+  const { gerarDadosExemplo, removerDadosExemplo } = await import('../src/models/exemplo.mjs');
+  const db = abrirBanco();
+  await inicializarBanco(db);
+  const antes = await carregarDashboard(db, { periodo: '4 semanas' });
+  await gerarDadosExemplo(db, new Date());
+  const cheio = await carregarDashboard(db, { periodo: '4 semanas' });
+  assert.ok(cheio.movimentacoes.total > antes.movimentacoes.total);
+  assert.ok(cheio.lotes.total > antes.lotes.total);
+  await gerarDadosExemplo(db, new Date()); // idempotente
+  const repetido = await carregarDashboard(db, { periodo: '4 semanas' });
+  assert.equal(repetido.lotes.total, cheio.lotes.total);
+  await removerDadosExemplo(db);
+  const limpo = await carregarDashboard(db, { periodo: '4 semanas' });
+  assert.equal(limpo.lotes.total, antes.lotes.total);
+});

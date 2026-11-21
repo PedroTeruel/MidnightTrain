@@ -4,6 +4,7 @@ import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PERIODOS, carregarDashboard, listarPatios, relatorioTexto } from '../../models/dashboard.mjs';
+import { gerarDadosExemplo, removerDadosExemplo } from '../../models/exemplo.mjs';
 import { podeVerDashboard } from '../../models/permissoes.mjs';
 import { gravarPreferencia, lerPreferencia } from '../../models/preferencias.mjs';
 import { useSessao } from '../../sessao';
@@ -15,7 +16,7 @@ const nomeWidget = id => CATALOGO.find(w => w.id === id).nome;
 const larguraWidget = id => CATALOGO.find(w => w.id === id).largura;
 
 export default function DashboardView({ navigation }) {
-  const { db, usuario } = useSessao();
+  const { db, usuario, recarregar } = useSessao();
   const { colors } = useTheme();
   const paleta = usePaleta();
   const [dash, setDash] = useState(null);
@@ -43,6 +44,20 @@ export default function DashboardView({ navigation }) {
 
   // Recalcula sempre que a tela volta ao foco: o banco é local, então os dados estão sempre atuais.
   useFocusEffect(useCallback(() => { if (liberado) carregar(); }, [carregar, liberado]));
+
+  // Opções de teste só aparecem em desenvolvimento; não vão para o app de produção.
+  const opcoesMenu = __DEV__
+    ? ['Personalizar widgets', 'Exportar relatório', 'Gerar dados de exemplo', 'Remover dados de exemplo']
+    : ['Personalizar widgets', 'Exportar relatório'];
+
+  async function escolherMenu(op) {
+    setPainel(op === 'Personalizar widgets' ? 'widgets' : op === 'Exportar relatório' ? 'exportar' : null);
+    if (op === 'Gerar dados de exemplo') await gerarDadosExemplo(db);
+    else if (op === 'Remover dados de exemplo') await removerDadosExemplo(db);
+    else return;
+    await recarregar();
+    await carregar();
+  }
 
   React.useEffect(() => {
     if (!liberado) return;
@@ -121,8 +136,8 @@ export default function DashboardView({ navigation }) {
 
       {painel === 'periodo' && <MenuOpcoes titulo="Período" opcoes={Object.keys(PERIODOS)} selecionado={periodo}
         aoFechar={() => setPainel(null)} aoEscolher={escolherPeriodo} />}
-      {painel === 'menu' && <MenuOpcoes titulo="Dashboard" opcoes={['Personalizar widgets', 'Exportar relatório']} selecionado=""
-        aoFechar={() => setPainel(null)} aoEscolher={op => setPainel(op === 'Personalizar widgets' ? 'widgets' : 'exportar')} />}
+      {painel === 'menu' && <MenuOpcoes titulo="Dashboard" opcoes={opcoesMenu} selecionado=""
+        aoFechar={() => setPainel(null)} aoEscolher={escolherMenu} />}
       {painel === 'alertas' && dash && <AlertasSheet alertas={dash.alertas} fechar={() => setPainel(null)}
         abrir={a => { setPainel(null); if (a.filtro) ir(a.filtro); else navigation.navigate('Estoque'); }} />}
       {painel === 'widgets' && <PersonalizarSheet layout={layout} aoMudar={salvarLayout} fechar={() => setPainel(null)} />}
