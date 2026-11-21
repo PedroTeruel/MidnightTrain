@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePaleta } from './cores';
@@ -109,11 +109,38 @@ export function Rosca({ partes, tamanho = 150, espessura = 18, children }) {
     );
   }
   return (
-    <View style={{ width: tamanho, height: tamanho }} accessible accessibilityRole="image"
+    <View style={{ width: tamanho, height: tamanho, alignItems: 'center', justifyContent: 'center' }} accessible accessibilityRole="image"
       accessibilityLabel={partes.map(p => `${p.nome} ${p.n}`).join(', ')}>
       {marcas}
       <View style={estilos.centroRosca}>{children}</View>
     </View>
+  );
+}
+
+// Menu flutuante ancorado (popover): fica sobre a própria tela, sem abrir outra página.
+// `ancora` posiciona o cartão: { top, right } ou { top, left }.
+export function Popover({ aoFechar, ancora, largura = 260, children }) {
+  const { colors } = useTheme();
+  const paleta = usePaleta();
+  return (
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={aoFechar}>
+      <Pressable accessibilityLabel="Fechar menu" style={StyleSheet.absoluteFill} onPress={aoFechar} />
+      <View accessibilityViewIsModal style={[estilos.popover, { backgroundColor: colors.card, borderColor: paleta.borda, width: largura }, ancora]}>
+        {children}
+      </View>
+    </Modal>
+  );
+}
+
+export function ItemPopover({ icone, texto, marcado, aoPressionar }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="menuitem" accessibilityState={{ selected: !!marcado }} onPress={aoPressionar}
+      style={({ pressed }) => [estilos.itemPopover, pressed && { backgroundColor: colors.background }]}>
+      {icone && <Ionicons name={icone} size={22} color={colors.primary} accessible={false} />}
+      <Text style={[estilos.itemPopoverTexto, { color: colors.text }]}>{texto}</Text>
+      {marcado && <Ionicons name="checkmark" size={22} color={colors.primary} accessible={false} />}
+    </Pressable>
   );
 }
 
@@ -142,7 +169,10 @@ const estilos = StyleSheet.create({
   colunaNumero: { fontSize: 13, fontWeight: '600' },
   rotulos: { flexDirection: 'row', paddingTop: 6 },
   rotulo: { flex: 1, textAlign: 'center', fontSize: 12 },
-  centroRosca: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  centroRosca: { alignItems: 'center', justifyContent: 'center' },
+  popover: { position: 'absolute', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 6, elevation: 10, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  itemPopover: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 48, paddingHorizontal: 18 },
+  itemPopoverTexto: { flex: 1, fontSize: 16 },
   pilula: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 },
   pilulaTexto: { fontSize: 12, fontWeight: '600' },
 });

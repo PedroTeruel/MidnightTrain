@@ -1,14 +1,15 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PERIODOS, carregarDashboard, listarPatios, relatorioTexto } from '../../models/dashboard.mjs';
 import { gerarDadosExemplo, removerDadosExemplo } from '../../models/exemplo.mjs';
 import { podeVerDashboard } from '../../models/permissoes.mjs';
 import { gravarPreferencia, lerPreferencia } from '../../models/preferencias.mjs';
 import { useSessao } from '../../sessao';
-import { Acao, Cartao, Formulario, IconeBotao, MenuOpcoes, Texto, Titulo } from '../components/Interface';
+import { Acao, Cartao, Formulario, IconeBotao, Texto, Titulo } from '../components/Interface';
+import { ItemPopover, Popover } from './Pecas';
 import { usePaleta } from './cores';
 import { CATALOGO, ORDEM_PADRAO, OCULTOS_PADRAO, Renderizar, normalizarLayout } from './widgets';
 
@@ -28,6 +29,10 @@ export default function DashboardView({ navigation }) {
   const [layout, setLayout] = useState({ ordem: ORDEM_PADRAO, ocultos: OCULTOS_PADRAO });
   const [painel, setPainel] = useState(null); // 'periodo' | 'menu' | 'alertas' | 'widgets' | 'exportar'
   const pedido = useRef(0);
+  const botaoPeriodo = useRef(null);
+  const [ancoraPeriodo, setAncoraPeriodo] = useState({ top: 120, right: 16 });
+  const { width: larguraTela } = useWindowDimensions();
+  const { top: topoSeguro } = useSafeAreaInsets();
   const liberado = podeVerDashboard(usuario);
 
   const carregar = useCallback(async (filtros = {}) => {
@@ -46,9 +51,14 @@ export default function DashboardView({ navigation }) {
   useFocusEffect(useCallback(() => { if (liberado) carregar(); }, [carregar, liberado]));
 
   // Opções de teste só aparecem em desenvolvimento; não vão para o app de produção.
-  const opcoesMenu = __DEV__
-    ? ['Personalizar widgets', 'Exportar relatório', 'Gerar dados de exemplo', 'Remover dados de exemplo']
-    : ['Personalizar widgets', 'Exportar relatório'];
+  const opcoesMenu = [
+    { texto: 'Personalizar widgets', icone: 'apps-outline' },
+    { texto: 'Exportar relatório', icone: 'download-outline' },
+    ...(__DEV__ ? [
+      { texto: 'Gerar dados de exemplo', icone: 'flask-outline' },
+      { texto: 'Remover dados de exemplo', icone: 'trash-outline' },
+    ] : []),
+  ];
 
   async function escolherMenu(op) {
     setPainel(op === 'Personalizar widgets' ? 'widgets' : op === 'Exportar relatório' ? 'exportar' : null);
@@ -95,6 +105,13 @@ export default function DashboardView({ navigation }) {
   const visiveis = layout.ordem.filter(id => !layout.ocultos.includes(id));
   const puxar = async () => { setAtualizando(true); await carregar(); setAtualizando(false); };
   const escolherPatio = valor => { setPatio(valor); carregar({ patio: valor }); };
+  const abrirPeriodo = () => {
+    // Mede o botão para o menu abrir logo abaixo dele, alinhado à direita.
+    botaoPeriodo.current?.measureInWindow((x, y, w, h) => {
+      if (w) setAncoraPeriodo({ top: y + h + 6, right: Math.max(8, larguraTela - (x + w)) });
+      setPainel('periodo');
+    });
+  };
   const escolherPeriodo = valor => { setPeriodo(valor); setPainel(null); carregar({ periodo: valor }); };
 
   return (
@@ -111,10 +128,10 @@ export default function DashboardView({ navigation }) {
             );
           })}
         </ScrollView>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Período: ${periodo}`} onPress={() => setPainel('periodo')}
+        <Pressable ref={botaoPeriodo} accessibilityRole="button" accessibilityLabel={`Período: ${periodo}`} onPress={abrirPeriodo}
           style={[estilos.periodo, { backgroundColor: colors.card, borderColor: paleta.borda }]}>
           <Ionicons name="calendar-outline" size={18} color={colors.primary} accessible={false} />
-          <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{periodo}</Text>
+          <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{{ '7 dias': '7 d', '4 semanas': '4 sem', '3 meses': '3 m' }[periodo]}</Text>
           <Ionicons name="chevron-down" size={14} color={colors.secondaryText} accessible={false} />
         </Pressable>
       </View>
@@ -134,10 +151,17 @@ export default function DashboardView({ navigation }) {
         </ScrollView>
       )}
 
-      {painel === 'periodo' && <MenuOpcoes titulo="Período" opcoes={Object.keys(PERIODOS)} selecionado={periodo}
-        aoFechar={() => setPainel(null)} aoEscolher={escolherPeriodo} />}
-      {painel === 'menu' && <MenuOpcoes titulo="Dashboard" opcoes={opcoesMenu} selecionado=""
-        aoFechar={() => setPainel(null)} aoEscolher={escolherMenu} />}
+      {painel === 'periodo' && (
+        <Popover aoFechar={() => setPainel(null)} ancora={ancoraPeriodo} largura={Math.min(280, larguraTela - 32)}>
+          {Object.keys(PERIODOS).map(nome => <ItemPopover key={nome} texto={nome} marcado={nome === periodo} aoPressionar={() => escolherPeriodo(nome)} />)}
+          <Text style={[estilos.notaPopover, { color: colors.secondaryText }]}>As variações ▲▼ comparam com o período anterior, de mesma duração.</Text>
+        </Popover>
+      )}
+      {painel === 'menu' && (
+        <Popover aoFechar={() => setPainel(null)} ancora={{ top: topoSeguro + 52, right: 12 }} largura={Math.min(300, larguraTela - 24)}>
+          {opcoesMenu.map(o => <ItemPopover key={o.texto} icone={o.icone} texto={o.texto} aoPressionar={() => escolherMenu(o.texto)} />)}
+        </Popover>
+      )}
       {painel === 'alertas' && dash && <AlertasSheet alertas={dash.alertas} fechar={() => setPainel(null)}
         abrir={a => { setPainel(null); if (a.filtro) ir(a.filtro); else navigation.navigate('Estoque'); }} />}
       {painel === 'widgets' && <PersonalizarSheet layout={layout} aoMudar={salvarLayout} fechar={() => setPainel(null)} />}
@@ -226,6 +250,7 @@ function ExportarSheet({ dash, fechar }) {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1 },
+  notaPopover: { fontSize: 13, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12, lineHeight: 18 },
   bloqueado: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
   cabecalhoAcoes: { flexDirection: 'row', alignItems: 'center' },
   selo: { position: 'absolute', top: 6, right: 4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },

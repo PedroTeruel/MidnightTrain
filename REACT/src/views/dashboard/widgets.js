@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { topLotesPorCondicao } from '../../models/dashboard.mjs';
 import { corDaCondicao, formatarSegundos, nomesCondicao, usePaleta } from './cores';
+import { PERIODOS, topLotesPorCondicao } from '../../models/dashboard.mjs';
 import { Colunas, Delta, Kpi, LinhaTrilho, Rosca, Widget } from './Pecas';
 
 export const CATALOGO = [
@@ -52,6 +52,7 @@ function CondicaoWidget({ dash, ir }) {
               <View style={[estilos.ponto, { backgroundColor: p.cor }]} />
               <Text style={[estilos.legendaNome, { color: colors.text }]}>{p.nome}</Text>
               <Text style={[estilos.legendaNumero, { color: colors.text }]}>{p.n}</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} accessible={false} />
             </Pressable>
           ))}
         </View>
@@ -63,45 +64,49 @@ function CondicaoWidget({ dash, ir }) {
 function MovimentacoesWidget({ dash }) {
   const { colors } = useTheme();
   const paleta = usePaleta();
-  const { serie, tipos, total, variacao } = dash.movimentacoes;
+  const { serie, total, variacao } = dash.movimentacoes;
   const maximo = Math.max(1, ...serie.map(s => s.total));
   const ordem = ['Entrada', 'Saída', 'Interna'];
   return (
     <Widget titulo="Movimentações">
-      <View style={estilos.kpiLinha}>
+      <View style={estilos.movCabecalho}>
         <Text style={[estilos.valorGrande, { color: colors.text }]}>{total}</Text>
+        <Text style={[estilos.movRotulo, { color: colors.secondaryText }]}>{total === 1 ? 'movimentação' : 'movimentações'} {PERIODOS[dash.periodo].texto}</Text>
         <Delta valor={variacao} boaQuandoSobe={null} />
+      </View>
+      <View style={estilos.legendaHorizontal}>
+        {ordem.map((nome, i) => (
+          <View key={nome} style={estilos.legendaMov}>
+            <View style={[estilos.quadrado, { backgroundColor: paleta.movimento[i] }]} />
+            <Text style={[estilos.sub, { color: colors.secondaryText }]}>{nome}</Text>
+          </View>
+        ))}
       </View>
       <View accessible accessibilityLabel={`Movimentações por período: ${serie.map(s => `${s.rotulo} ${s.total}`).join(', ')}`}>
         <View style={[estilos.colunasMov, { borderBottomColor: paleta.borda }]}>
           {serie.map(s => (
             <View key={s.rotulo + s.ini} style={estilos.colunaMov}>
               <Text style={[estilos.colunaNumero, { color: colors.text }]}>{s.total}</Text>
-              <View style={{ width: 28 }}>
+              <View style={{ width: 24 }}>
                 {[...ordem].reverse().map((tipo, k) => {
                   const idx = ordem.indexOf(tipo);
                   const h = s[tipo] ? Math.max(3, Math.round((s[tipo] / maximo) * 92)) : 0;
-                  return h ? <View key={tipo} style={{ height: h, backgroundColor: paleta.movimento[idx], marginTop: k ? 1 : 0, borderTopLeftRadius: k === 0 ? 4 : 0, borderTopRightRadius: k === 0 ? 4 : 0 }} /> : null;
+                  return h ? <View key={tipo} style={{ height: h, backgroundColor: paleta.movimento[idx], marginTop: k ? 2 : 0, borderTopLeftRadius: k === 0 ? 4 : 0, borderTopRightRadius: k === 0 ? 4 : 0 }} /> : null;
                 })}
               </View>
             </View>
           ))}
         </View>
         <View style={estilos.rotulosMov}>
-          {serie.map(s => <Text key={s.rotulo + s.ini} style={[estilos.rotuloMov, { color: colors.secondaryText }]}>{s.rotulo}</Text>)}
+          {serie.map(s => <Text key={s.rotulo + s.ini} numberOfLines={1} style={[estilos.rotuloMov, { color: colors.secondaryText }]}>{s.rotulo}</Text>)}
         </View>
-      </View>
-      <View style={estilos.legendaHorizontal}>
-        {tipos.map((t, i) => (
-          <View key={t.nome} style={estilos.legendaItem}>
-            <View style={[estilos.ponto, { backgroundColor: paleta.movimento[i] }]} />
-            <Text style={[estilos.sub, { color: colors.text }]}>{t.nome} {t.n}</Text>
-          </View>
-        ))}
       </View>
     </Widget>
   );
 }
+
+const rotuloCurto = { 'Não avaliada': 'Não aval.' };
+const rotuloResumo = { 'Não avaliada': 'não avaliados', Boa: 'em condição Boa', 'Atenção': 'em condição Atenção', Ruim: 'em condição Ruim' };
 
 function CondicaoPorLoteWidget({ dash, ir }) {
   const { colors } = useTheme();
@@ -109,28 +114,52 @@ function CondicaoPorLoteWidget({ dash, ir }) {
   const [cond, setCond] = useState('Ruim');
   const { linhas, restantes } = topLotesPorCondicao(dash.condicaoPorLote, cond, 5);
   const filtro = { 'Não avaliada': 'nao', Boa: 'boa', 'Atenção': 'atencao', Ruim: 'ruim' }[cond];
+  const totalCond = dash.condicaoPorLote.reduce((soma, l) => soma + (l[cond] ?? 0), 0);
+  const lotesCond = dash.condicaoPorLote.filter(l => (l[cond] ?? 0) > 0).length;
+  const corBarra = corDaCondicao(paleta, cond);
+  const statusCor = { Pendente: paleta.pendente.fg, Aprovado: paleta.aprovado.fg, Reprovado: paleta.reprovado.fg };
   return (
     <Widget titulo="Condição por lote">
-      <View style={estilos.chips}>
+      <View accessibilityRole="tablist" style={[estilos.segmentos, { backgroundColor: paleta.trilho }]}>
         {nomesCondicao.map(nome => {
           const sel = nome === cond;
           return (
-            <Pressable key={nome} accessibilityRole="button" accessibilityState={{ selected: sel }} onPress={() => setCond(nome)}
-              style={[estilos.chip, { backgroundColor: sel ? colors.primary : colors.background, borderColor: paleta.borda }]}>
-              <View style={[estilos.ponto, { backgroundColor: sel ? '#fff' : corDaCondicao(paleta, nome) }]} />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: sel ? '#fff' : colors.text }}>{nome}</Text>
+            <Pressable key={nome} accessibilityRole="tab" accessibilityLabel={nome} accessibilityState={{ selected: sel }} onPress={() => setCond(nome)}
+              style={[estilos.segmento, sel && [estilos.segmentoSel, { backgroundColor: colors.card }]]}>
+              <View style={[estilos.quadrado, { backgroundColor: corDaCondicao(paleta, nome) }]} />
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: sel ? colors.text : colors.secondaryText }}>{rotuloCurto[nome] ?? nome}</Text>
             </Pressable>
           );
         })}
       </View>
+      <View style={estilos.movCabecalho}>
+        <Text style={[estilos.valorGrande, { color: colors.text }]}>{totalCond}</Text>
+        <Text style={[estilos.movRotulo, { color: colors.secondaryText }]}>
+          {totalCond === 1 ? 'dormente' : 'dormentes'} {rotuloResumo[cond]} · {lotesCond} {lotesCond === 1 ? 'lote' : 'lotes'}
+        </Text>
+      </View>
       {linhas.length === 0 && <Text style={[estilos.sub, { color: colors.secondaryText }]}>Nenhum lote com dormentes.</Text>}
-      {linhas.map(l => (
-        <LinhaTrilho key={l.chave} nome={`Lote ${l.id}`} n={l[cond]} maximo={l.total}
-          rotuloNumero={`${l[cond]}/${l.total}`} aoPressionar={() => ir({ cond: filtro, lote: l.chave })} />
-      ))}
+      <View style={{ gap: 14 }}>
+        {linhas.map(l => (
+          <Pressable key={l.chave} accessibilityRole="button" accessibilityLabel={`Lote ${l.id}, ${l.aprovacao}, ${l[cond]} de ${l.total}`}
+            onPress={() => ir({ cond: filtro, lote: l.chave })} style={estilos.linhaLote}>
+            <View style={estilos.loteNome}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Lote {l.id}</Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: statusCor[l.aprovacao] ?? colors.secondaryText }}>{l.aprovacao}</Text>
+            </View>
+            <View style={[estilos.trilhoLote, { backgroundColor: paleta.trilho }]}>
+              {l[cond] > 0 && <View style={{ height: 12, borderRadius: 6, backgroundColor: corBarra, width: `${Math.max(6, Math.round((l[cond] / l.total) * 100))}%` }} />}
+            </View>
+            <Text style={estilos.loteNumero}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{l[cond]}</Text>
+              <Text style={{ fontSize: 12, color: colors.secondaryText }}> / {l.total}</Text>
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       {restantes > 0 && (
-        <Pressable accessibilityRole="button" onPress={() => ir({ cond: filtro })}>
-          <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '600' }}>Ver todos os {linhas.length + restantes} lotes</Text>
+        <Pressable accessibilityRole="button" onPress={() => ir({ cond: filtro })} style={[estilos.verTodos, { backgroundColor: colors.background }]}>
+          <Text style={{ color: colors.primary, fontSize: 15, fontWeight: '600' }}>Ver todos os {linhas.length + restantes} lotes</Text>
         </Pressable>
       )}
     </Widget>
@@ -213,15 +242,27 @@ const estilos = StyleSheet.create({
   legendaItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
   legendaNome: { flex: 1, fontSize: 14 },
   legendaNumero: { fontSize: 14, fontWeight: '700' },
-  legendaHorizontal: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 },
+  legendaHorizontal: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },
+  legendaMov: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  quadrado: { width: 8, height: 8, borderRadius: 2 },
+  movCabecalho: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 8, rowGap: 6 },
+  movRotulo: { fontSize: 14 },
+  segmentos: { flexDirection: 'row', gap: 2, padding: 3, borderRadius: 10 },
+  segmento: { flex: 1, minWidth: 0, minHeight: 32, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  segmentoSel: { elevation: 2, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  linhaLote: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  loteNome: { width: 74, gap: 1 },
+  trilhoLote: { flex: 1, height: 12, borderRadius: 6, overflow: 'hidden', justifyContent: 'center' },
+  loteNumero: { width: 54, textAlign: 'right' },
+  verTodos: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   ponto: { width: 10, height: 10, borderRadius: 5 },
   kpiLinha: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  valorGrande: { fontSize: 34, fontWeight: '700' },
+  valorGrande: { fontSize: 30, fontWeight: '700' },
   colunasMov: { flexDirection: 'row', alignItems: 'flex-end', height: 132, borderBottomWidth: StyleSheet.hairlineWidth },
   colunaMov: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4, height: '100%' },
-  colunaNumero: { fontSize: 12, fontWeight: '600' },
+  colunaNumero: { fontSize: 13, fontWeight: '600' },
   rotulosMov: { flexDirection: 'row', paddingTop: 6 },
-  rotuloMov: { flex: 1, textAlign: 'center', fontSize: 11 },
+  rotuloMov: { flex: 1, textAlign: 'center', fontSize: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   recente: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
