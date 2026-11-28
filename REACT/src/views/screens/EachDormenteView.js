@@ -1,71 +1,133 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { carregarLocaisApi } from '../../services/estoqueApi';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { condicoesDormente } from '../../models/estoque.mjs';
-import { Acao, Campo, Cartao, Formulario, Linha, Secao, Texto, Titulo, styles } from '../components/Interface';
+import {
+  carregarLocaisApi,
+  finalizarBuscaDormenteApi,
+  iniciarBuscaDormenteApi,
+} from '../../services/estoqueApi';
+import {
+  Acao,
+  Campo,
+  Cartao,
+  Formulario,
+  Linha,
+  Secao,
+  Texto,
+  Titulo,
+  styles,
+} from '../components/Interface';
 import DormenteEditSheet from '../components/DormenteEditSheet';
 
 const titulos = { condicao: 'Condição', tamanho: 'Tamanho', especie: 'Espécie' };
 
-export default function EachDormenteView({ navigation, dormente, lote, token, onSalvarDormente, onRegistrarEntrada, onRegistrarTransferencia, onRegistrarSaida, }) {
+const rotulosSituacao = {
+  NAO_INFORMADO: 'Não informado',
+  EM_ESTOQUE: 'Em estoque',
+  RETIRADO: 'Retirado',
+  EXTRAVIADO: 'Extraviado',
+};
+
+export default function EachDormenteView({
+  navigation,
+  dormente,
+  lote,
+  token,
+  onSalvarDormente,
+  onRegistrarEntrada,
+  onRegistrarTransferencia,
+  onRegistrarSaida,
+  onAlternarExtravio,
+}) {
   const [editando, setEditando] = useState(false);
   const [campo, setCampo] = useState(null);
   const [valor, setValor] = useState('');
   const [salvando, setSalvando] = useState(false);
   const gravacaoCampo = useRef(Promise.resolve());
   const titulo = dormente?.nome ?? 'Dormente não encontrado';
+
   const [locais, setLocais] = useState([]);
   const [carregandoLocais, setCarregandoLocais] = useState(false);
+
   const [entradaAberta, setEntradaAberta] = useState(false);
   const [localSelecionado, setLocalSelecionado] = useState(null);
   const [registrandoEntrada, setRegistrandoEntrada] = useState(false);
+
   const [transferenciaAberta, setTransferenciaAberta] = useState(false);
   const [destinoSelecionado, setDestinoSelecionado] = useState(null);
   const [transferindo, setTransferindo] = useState(false);
+
   const [saidaAberta, setSaidaAberta] = useState(false);
   const [registrandoSaida, setRegistrandoSaida] = useState(false);
+
+  // Estados para KPIs de eficiência operacional e tempo de localização
+  const [prazoMinutos, setPrazoMinutos] = useState('15');
+  const [inicioOperacao, setInicioOperacao] = useState(null);
+  const [buscaAtiva, setBuscaAtiva] = useState(null);
+  const [processandoBusca, setProcessandoBusca] = useState(false);
+
+  // Estado para marcação/reversão de extravio
+  const [alterandoExtravio, setAlterandoExtravio] = useState(false);
 
   useEffect(() => {
     let ativo = true;
 
     async function carregarLocais() {
-     setCarregandoLocais(true);
+      setCarregandoLocais(true);
 
-     try {
+      try {
         const resultado = await carregarLocaisApi(token);
-
         if (ativo) {
           setLocais(resultado);
         }
       } catch (erro) {
-       if (ativo) {
+        if (ativo) {
           Alert.alert('Erro ao carregar locais', erro.message);
         }
-     } finally {
-       if (ativo) {
-         setCarregandoLocais(false);
+      } finally {
+        if (ativo) {
+          setCarregandoLocais(false);
         }
-     }
-   }
+      }
+    }
 
-  if (token) {
-    carregarLocais();
-  }
+    if (token) {
+      carregarLocais();
+    }
 
-  return () => {
-    ativo = false;
-  };
-}, [token]);
+    return () => {
+      ativo = false;
+    };
+  }, [token]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
       title: titulo,
-      headerRight: dormente ? () => <Acao titulo="Editar" onPress={() => setEditando(true)} /> : undefined,
+      headerRight: dormente
+        ? () => <Acao titulo="Editar" onPress={() => setEditando(true)} />
+        : undefined,
     });
   }, [navigation, titulo, dormente]);
 
-  if (!dormente) return <View style={styles.conteudo}><Titulo>{titulo}</Titulo></View>;
+  if (!dormente) {
+    return (
+      <View style={styles.conteudo}>
+        <Titulo>{titulo}</Titulo>
+      </View>
+    );
+  }
+
+  function montarOpcoesOperacao() {
+    const duracaoSegundos = inicioOperacao
+      ? Math.max(0, Math.round((Date.now() - inicioOperacao) / 1000))
+      : 0;
+
+    return {
+      prazoMinutos: Number(prazoMinutos) || 0,
+      duracaoSegundos,
+    };
+  }
 
   function editar(chave) {
     gravacaoCampo.current = Promise.resolve();
@@ -76,10 +138,9 @@ export default function EachDormenteView({ navigation, dormente, lote, token, on
   function atualizarCampo(novoValor) {
     setValor(novoValor);
     const alteracao = { ...dormente, [campo]: novoValor };
-    // Serializa os textos digitados para uma gravação antiga não sobrescrever a mais recente.
-    const gravacao = gravacaoCampo.current.catch(() => {}).then(() =>
-      onSalvarDormente(dormente.id, alteracao)
-    );
+    const gravacao = gravacaoCampo.current
+      .catch(() => {})
+      .then(() => onSalvarDormente(dormente.id, alteracao));
     gravacao.catch(() => {});
     gravacaoCampo.current = gravacao;
   }
@@ -93,7 +154,10 @@ export default function EachDormenteView({ navigation, dormente, lote, token, on
     } catch (erro) {
       Alert.alert('Não foi possível salvar', erro.message, [
         { text: 'OK', style: 'cancel' },
-        { text: 'Tentar novamente', onPress: () => salvar({ [campo]: valor }, () => setCampo(null)) },
+        {
+          text: 'Tentar novamente',
+          onPress: () => salvar({ [campo]: valor }, () => setCampo(null)),
+        },
       ]);
     } finally {
       setSalvando(false);
@@ -109,7 +173,10 @@ export default function EachDormenteView({ navigation, dormente, lote, token, on
     } catch (erro) {
       Alert.alert('Não foi possível salvar', erro.message, [
         { text: 'OK', style: 'cancel' },
-        { text: 'Tentar novamente', onPress: () => salvar(alteracoes, depois) },
+        {
+          text: 'Tentar novamente',
+          onPress: () => salvar(alteracoes, depois),
+        },
       ]);
     } finally {
       setSalvando(false);
@@ -117,320 +184,488 @@ export default function EachDormenteView({ navigation, dormente, lote, token, on
   }
 
   function abrirEntrada() {
-  if (carregandoLocais) return;
+    if (carregandoLocais) return;
 
-  if (locais.length === 0) {
-    Alert.alert(
-      'Nenhum local disponível',
-      'Não existem locais ativos cadastrados no sistema.'
-    );
-    return;
-  }
+    if (locais.length === 0) {
+      Alert.alert(
+        'Nenhum local disponível',
+        'Não existem locais ativos cadastrados no sistema.'
+      );
+      return;
+    }
 
-  setLocalSelecionado(null);
-  setEntradaAberta(true);
-}
-
-async function confirmarEntrada() {
-  if (localSelecionado === null) {
-    Alert.alert('Atenção', 'Selecione um local para continuar.');
-    return;
-  }
-
-  if (registrandoEntrada) return;
-
-  setRegistrandoEntrada(true);
-
-  try {
-    await onRegistrarEntrada(dormente.id, localSelecionado);
-
-    setEntradaAberta(false);
     setLocalSelecionado(null);
-
-    Alert.alert('Sucesso', 'Entrada do dormente registrada.');
-  } catch (erro) {
-    Alert.alert('Erro ao registrar entrada', erro.message);
-  } finally {
-    setRegistrandoEntrada(false);
+    setPrazoMinutos('15');
+    setInicioOperacao(Date.now());
+    setEntradaAberta(true);
   }
-}
 
-function abrirTransferencia() {
-  if (
-    carregandoLocais ||
+  async function confirmarEntrada() {
+    if (localSelecionado === null) {
+      Alert.alert('Atenção', 'Selecione um local para continuar.');
+      return;
+    }
+
+    if (registrandoEntrada) return;
+
+    setRegistrandoEntrada(true);
+
+    try {
+      await onRegistrarEntrada(
+        dormente.id,
+        localSelecionado,
+        montarOpcoesOperacao()
+      );
+
+      setEntradaAberta(false);
+      setLocalSelecionado(null);
+
+      Alert.alert('Sucesso', 'Entrada do dormente registrada.');
+    } catch (erro) {
+      Alert.alert('Erro ao registrar entrada', erro.message);
+    } finally {
+      setRegistrandoEntrada(false);
+    }
+  }
+
+  function abrirTransferencia() {
+    if (
+      carregandoLocais ||
+      registrandoEntrada ||
+      transferindo ||
+      registrandoSaida
+    ) {
+      return;
+    }
+
+    const destinosDisponiveis = locais.filter(
+      local => String(local.id) !== String(dormente.local_id)
+    );
+
+    if (destinosDisponiveis.length === 0) {
+      Alert.alert(
+        'Nenhum destino disponível',
+        'Não existem outros locais ativos para realizar a transferência.'
+      );
+      return;
+    }
+
+    setDestinoSelecionado(null);
+    setPrazoMinutos('15');
+    setInicioOperacao(Date.now());
+    setTransferenciaAberta(true);
+  }
+
+  async function confirmarTransferencia() {
+    if (destinoSelecionado === null) {
+      Alert.alert('Atenção', 'Selecione um local de destino.');
+      return;
+    }
+
+    if (String(destinoSelecionado) === String(dormente.local_id)) {
+      Alert.alert('Atenção', 'O destino precisa ser diferente do local atual.');
+      return;
+    }
+
+    if (transferindo) return;
+
+    setTransferindo(true);
+
+    try {
+      await onRegistrarTransferencia(
+        dormente.id,
+        destinoSelecionado,
+        montarOpcoesOperacao()
+      );
+
+      setTransferenciaAberta(false);
+      setDestinoSelecionado(null);
+
+      Alert.alert('Sucesso', 'Transferência do dormente registrada.');
+    } catch (erro) {
+      Alert.alert('Erro ao transferir', erro.message);
+    } finally {
+      setTransferindo(false);
+    }
+  }
+
+  function abrirSaida() {
+    if (registrandoSaida || transferindo || registrandoEntrada) return;
+
+    setPrazoMinutos('15');
+    setInicioOperacao(Date.now());
+    setSaidaAberta(true);
+  }
+
+  async function confirmarSaida() {
+    if (registrandoSaida) return;
+
+    setRegistrandoSaida(true);
+
+    try {
+      await onRegistrarSaida(dormente.id, montarOpcoesOperacao());
+
+      setSaidaAberta(false);
+
+      Alert.alert('Sucesso', 'Saída do dormente registrada.');
+    } catch (erro) {
+      Alert.alert('Erro ao registrar saída', erro.message);
+    } finally {
+      setRegistrandoSaida(false);
+    }
+  }
+
+  async function iniciarBuscaFisica() {
+    if (processandoBusca) return;
+
+    setProcessandoBusca(true);
+    try {
+      const busca = await iniciarBuscaDormenteApi(dormente.id, token);
+      setBuscaAtiva({ id: busca.id, iniciadaEmMs: Date.now() });
+    } catch (erro) {
+      Alert.alert('Erro ao iniciar busca', erro.message);
+    } finally {
+      setProcessandoBusca(false);
+    }
+  }
+
+  async function concluirBuscaFisica(resultado) {
+    if (!buscaAtiva || processandoBusca) return;
+
+    setProcessandoBusca(true);
+    try {
+      await finalizarBuscaDormenteApi(
+        dormente.id,
+        buscaAtiva.id,
+        resultado,
+        token
+      );
+      const segundos = Math.max(
+        1,
+        Math.round((Date.now() - buscaAtiva.iniciadaEmMs) / 1000)
+      );
+      setBuscaAtiva(null);
+
+      if (resultado !== 'CANCELADA') {
+        Alert.alert('Busca registrada', `Tempo medido: ${segundos} s.`);
+      }
+    } catch (erro) {
+      Alert.alert('Erro ao finalizar busca', erro.message);
+    } finally {
+      setProcessandoBusca(false);
+    }
+  }
+
+  function confirmarExtravio() {
+    if (alterandoExtravio || !onAlternarExtravio) return;
+
+    const marcar = dormente.situacao_estoque !== 'EXTRAVIADO';
+
+    Alert.alert(
+      marcar ? 'Marcar como extraviado' : 'Reverter extravio',
+      marcar
+        ? 'Este dormente passará a contar na Taxa de perdas da dashboard.'
+        : 'O dormente voltará para a situação normal de estoque.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          style: marcar ? 'destructive' : 'default',
+          onPress: async () => {
+            setAlterandoExtravio(true);
+            try {
+              await onAlternarExtravio(dormente.id, marcar);
+            } catch (erro) {
+              Alert.alert('Erro', erro.message);
+            } finally {
+              setAlterandoExtravio(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  const localAtual = locais.find(
+    local => String(local.id) === String(dormente.local_id)
+  );
+  const local = localAtual
+    ? `${localAtual.patio} - Setor ${localAtual.setor}`
+    : 'Não informado';
+
+  const bloqueado =
     registrandoEntrada ||
     transferindo ||
-    registrandoSaida
-    ) return;
-
-  const destinosDisponiveis = locais.filter(
-    local => String(local.id) !== String(dormente.local_id)
-  );
-
-  if (destinosDisponiveis.length === 0) {
-    Alert.alert(
-      'Nenhum destino disponível',
-      'Não existem outros locais ativos para realizar a transferência.'
-    );
-    return;
-  }
-
-  setDestinoSelecionado(null);
-  setTransferenciaAberta(true);
-}
-
-async function confirmarTransferencia() {
-  if (destinoSelecionado === null) {
-    Alert.alert('Atenção', 'Selecione um local de destino.');
-    return;
-  }
-
-  if (String(destinoSelecionado) === String(dormente.local_id)) {
-    Alert.alert('Atenção', 'O destino precisa ser diferente do local atual.');
-    return;
-  }
-
-  if (transferindo) return;
-
-  setTransferindo(true);
-
-  try {
-    await onRegistrarTransferencia(dormente.id, destinoSelecionado);
-
-    setTransferenciaAberta(false);
-    setDestinoSelecionado(null);
-
-    Alert.alert('Sucesso', 'Transferência do dormente registrada.');
-  } catch (erro) {
-    Alert.alert('Erro ao transferir', erro.message);
-  } finally {
-    setTransferindo(false);
-  }
-}
-
-function abrirSaida() {
-  if (registrandoSaida || transferindo || registrandoEntrada) return;
-
-  setSaidaAberta(true);
-}
-
-async function confirmarSaida() {
-  if (registrandoSaida) return;
-
-  setRegistrandoSaida(true);
-
-  try {
-    await onRegistrarSaida(dormente.id);
-
-    setSaidaAberta(false);
-
-    Alert.alert(
-      'Sucesso',
-      'Saída do dormente registrada.'
-    );
-  } catch (erro) {
-    Alert.alert(
-      'Erro ao registrar saída',
-      erro.message
-    );
-  } finally {
-    setRegistrandoSaida(false);
-  }
-}
-
-  const localAtual = locais.find( local => String(local.id) === String(dormente.local_id));
-  const local = localAtual ? `${localAtual.patio} - Setor ${localAtual.setor}`: 'Não informado';
+    registrandoSaida ||
+    processandoBusca ||
+    alterandoExtravio;
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.tela}>
       <ScrollView contentContainerStyle={styles.conteudo}>
-        <View style={estilos.centro}><Titulo>{titulo}</Titulo></View>
+        <View style={estilos.centro}>
+          <Titulo>{titulo}</Titulo>
+        </View>
         <Secao titulo="IDENTIFICAÇÃO">
-          <Cartao><Linha titulo="Lote" valor={lote.id} /><Linha titulo="Local" valor={local} /></Cartao>
+          <Cartao>
+            <Linha titulo="Lote" valor={lote.id} />
+            <Linha titulo="Local" valor={local} />
+          </Cartao>
         </Secao>
         <Secao titulo="INSPEÇÃO">
-          <Cartao><Linha titulo="Condição" valor={dormente.condicao} onPress={() => editar('condicao')} /></Cartao>
+          <Cartao>
+            <Linha
+              titulo="Condição"
+              valor={dormente.condicao}
+              onPress={() => editar('condicao')}
+            />
+          </Cartao>
         </Secao>
         <Secao titulo="CARACTERÍSTICAS">
           <Cartao>
-            <Linha titulo="Tamanho" valor={dormente.tamanho} onPress={() => editar('tamanho')} />
-            <Linha titulo="Espécie" valor={dormente.especie} onPress={() => editar('especie')} />
+            <Linha
+              titulo="Tamanho"
+              valor={dormente.tamanho}
+              onPress={() => editar('tamanho')}
+            />
+            <Linha
+              titulo="Espécie"
+              valor={dormente.especie}
+              onPress={() => editar('especie')}
+            />
           </Cartao>
         </Secao>
-        <Texto secundario>Última atualização: {new Date(dormente.ultimaAtualizacao).toLocaleString('pt-BR')}</Texto>
-      </ScrollView>
-      <View style={estilos.rodape}>
-  {dormente.situacao_estoque === 'NAO_INFORMADO' && (
-    <Acao
-      titulo="Registrar entrada"
-      destaque
-      disabled={
-        carregandoLocais ||
-        registrandoEntrada ||
-        transferindo ||
-        registrandoSaida
-      }
-      onPress={abrirEntrada}
-    />
-  )}
-
-  {dormente.situacao_estoque === 'EM_ESTOQUE' && (
-    <Acao
-      titulo="Transferir"
-      destaque
-      disabled={
-        carregandoLocais ||
-        registrandoEntrada ||
-        transferindo ||
-        registrandoSaida
-      }
-      onPress={abrirTransferencia}
-    />
-  )}
-
-  {dormente.situacao_estoque === 'EM_ESTOQUE' && (
-    <Acao
-      titulo="Registrar saída"
-      perigo
-      disabled={
-        registrandoEntrada ||
-        transferindo ||
-        registrandoSaida
-      }
-      onPress={abrirSaida}
-    />
-  )}
-
-  <Acao
-    titulo="Salvar"
-    destaque
-    disabled={
-      salvando ||
-      registrandoEntrada ||
-      transferindo ||
-      registrandoSaida
-    }
-    onPress={() => salvar({}, () => navigation.goBack())}
-  />
-</View>
-      {editando && (
-  <DormenteEditSheet
-    dormente={dormente}
-    fechar={() => setEditando(false)}
-    onSalvar={onSalvarDormente}
-  />
-)}
-
-{campo && (
-  <Formulario
-    titulo={titulos[campo]}
-    fechar={concluirCampo}
-    acao="OK"
-    ocupado={salvando}
-    salvar={concluirCampo}
-  >
-    <Cartao>
-      {campo === 'condicao'
-        ? condicoesDormente.map(condicao => (
+        <Secao titulo="EXTRAVIO">
+          <Cartao>
             <Linha
-              key={condicao}
-              titulo={condicao}
-              valor={valor === condicao ? 'Selecionado' : ''}
-              onPress={() => atualizarCampo(condicao)}
+              titulo="Situação no estoque"
+              valor={
+                rotulosSituacao[dormente.situacao_estoque] || 'Não informado'
+              }
             />
-          ))
-        : (
-            <Campo
-              titulo={titulos[campo]}
-              valor={valor}
-              onChangeText={atualizarCampo}
+            <Linha
+              titulo={
+                dormente.situacao_estoque === 'EXTRAVIADO'
+                  ? 'Reverter extravio'
+                  : 'Marcar como extraviado'
+              }
+              onPress={confirmarExtravio}
             />
-          )}
-    </Cartao>
-  </Formulario>
-)}
+          </Cartao>
+        </Secao>
+        <Texto secundario>
+          Última atualização:{' '}
+          {new Date(dormente.ultimaAtualizacao).toLocaleString('pt-BR')}
+        </Texto>
+      </ScrollView>
 
-{entradaAberta && (
-  <Formulario
-    titulo="Registrar entrada"
-    fechar={() => setEntradaAberta(false)}
-    acao="Confirmar"
-    ocupado={registrandoEntrada}
-    salvar={confirmarEntrada}
-  >
-    <Secao titulo="SELECIONE O LOCAL DE DESTINO">
-      <Cartao>
-        {locais.map(local => (
-          <Linha
-            key={local.id}
-            titulo={`${local.patio} - Setor ${local.setor}`}
-            valor={localSelecionado === local.id ? 'Selecionado' : ''}
-            onPress={() => setLocalSelecionado(local.id)}
+      <View style={estilos.rodape}>
+        <Acao
+          titulo="Localizar fisicamente"
+          icone="search-outline"
+          disabled={bloqueado}
+          onPress={iniciarBuscaFisica}
+        />
+
+        {dormente.situacao_estoque === 'NAO_INFORMADO' && (
+          <Acao
+            titulo="Registrar entrada"
+            destaque
+            disabled={carregandoLocais || bloqueado}
+            onPress={abrirEntrada}
           />
-        ))}
-      </Cartao>
-    </Secao>
-  </Formulario>
-)}
+        )}
 
-{transferenciaAberta && (
-  <Formulario
-    titulo="Transferir dormente"
-    fechar={() => setTransferenciaAberta(false)}
-    salvar={confirmarTransferencia}
-    ocupado={transferindo}
-    acao="Transferir"
-  >
-    <Cartao>
-      {locais
-        .filter(local => String(local.id) !== String(dormente.local_id))
-        .map(local => (
-          <Linha
-            key={local.id}
-            titulo={`${local.patio} - Setor ${local.setor}`}
-            valor={
-              String(destinoSelecionado) === String(local.id)
-                ? 'Selecionado'
-                : ''
-            }
-            onPress={() => setDestinoSelecionado(local.id)}
+        {dormente.situacao_estoque === 'EM_ESTOQUE' && (
+          <Acao
+            titulo="Transferir"
+            destaque
+            disabled={carregandoLocais || bloqueado}
+            onPress={abrirTransferencia}
           />
-        ))}
-    </Cartao>
-  </Formulario>
-)}
+        )}
 
-{saidaAberta && (
-  <Formulario
-    titulo="Registrar saída"
-    fechar={() => setSaidaAberta(false)}
-    salvar={confirmarSaida}
-    ocupado={registrandoSaida}
-    acao="Confirmar saída"
-  >
-    <Cartao>
-      <Linha
-        titulo="Dormente"
-        valor={dormente.nome}
-      />
+        {dormente.situacao_estoque === 'EM_ESTOQUE' && (
+          <Acao
+            titulo="Registrar saída"
+            perigo
+            disabled={bloqueado}
+            onPress={abrirSaida}
+          />
+        )}
 
-      <Linha
-        titulo="Local atual"
-        valor={local}
-      />
+        <Acao
+          titulo="Salvar"
+          destaque
+          disabled={salvando || bloqueado}
+          onPress={() => salvar({}, () => navigation.goBack())}
+        />
+      </View>
 
-      <Linha
-        titulo="Situação após a operação"
-        valor="RETIRADO"
-      />
-    </Cartao>
-  </Formulario>
-)}
+      {editando && (
+        <DormenteEditSheet
+          dormente={dormente}
+          fechar={() => setEditando(false)}
+          onSalvar={onSalvarDormente}
+        />
+      )}
+
+      {campo && (
+        <Formulario
+          titulo={titulos[campo]}
+          fechar={concluirCampo}
+          acao="OK"
+          ocupado={salvando}
+          salvar={concluirCampo}
+        >
+          <Cartao>
+            {campo === 'condicao' ? (
+              condicoesDormente.map(condicao => (
+                <Linha
+                  key={condicao}
+                  titulo={condicao}
+                  valor={valor === condicao ? 'Selecionado' : ''}
+                  onPress={() => atualizarCampo(condicao)}
+                />
+              ))
+            ) : (
+              <Campo
+                titulo={titulos[campo]}
+                valor={valor}
+                onChangeText={atualizarCampo}
+              />
+            )}
+          </Cartao>
+        </Formulario>
+      )}
+
+      {entradaAberta && (
+        <Formulario
+          titulo="Registrar entrada"
+          fechar={() => setEntradaAberta(false)}
+          acao="Confirmar"
+          ocupado={registrandoEntrada}
+          salvar={confirmarEntrada}
+        >
+          <Secao titulo="PRAZO DA OPERAÇÃO">
+            <Cartao>
+              <Campo
+                titulo="Prazo previsto (minutos)"
+                valor={prazoMinutos}
+                onChangeText={setPrazoMinutos}
+                keyboardType="numeric"
+              />
+            </Cartao>
+          </Secao>
+          <Secao titulo="SELECIONE O LOCAL DE DESTINO">
+            <Cartao>
+              {locais.map(item => (
+                <Linha
+                  key={item.id}
+                  titulo={`${item.patio} - Setor ${item.setor}`}
+                  valor={localSelecionado === item.id ? 'Selecionado' : ''}
+                  onPress={() => setLocalSelecionado(item.id)}
+                />
+              ))}
+            </Cartao>
+          </Secao>
+        </Formulario>
+      )}
+
+      {transferenciaAberta && (
+        <Formulario
+          titulo="Transferir dormente"
+          fechar={() => setTransferenciaAberta(false)}
+          salvar={confirmarTransferencia}
+          ocupado={transferindo}
+          acao="Transferir"
+        >
+          <Secao titulo="PRAZO DA OPERAÇÃO">
+            <Cartao>
+              <Campo
+                titulo="Prazo previsto (minutos)"
+                valor={prazoMinutos}
+                onChangeText={setPrazoMinutos}
+                keyboardType="numeric"
+              />
+            </Cartao>
+          </Secao>
+          <Secao titulo="LOCAL DE DESTINO">
+            <Cartao>
+              {locais
+                .filter(item => String(item.id) !== String(dormente.local_id))
+                .map(item => (
+                  <Linha
+                    key={item.id}
+                    titulo={`${item.patio} - Setor ${item.setor}`}
+                    valor={
+                      String(destinoSelecionado) === String(item.id)
+                        ? 'Selecionado'
+                        : ''
+                    }
+                    onPress={() => setDestinoSelecionado(item.id)}
+                  />
+                ))}
+            </Cartao>
+          </Secao>
+        </Formulario>
+      )}
+
+      {saidaAberta && (
+        <Formulario
+          titulo="Registrar saída"
+          fechar={() => setSaidaAberta(false)}
+          salvar={confirmarSaida}
+          ocupado={registrandoSaida}
+          acao="Confirmar saída"
+        >
+          <Secao titulo="PRAZO DA OPERAÇÃO">
+            <Cartao>
+              <Campo
+                titulo="Prazo previsto (minutos)"
+                valor={prazoMinutos}
+                onChangeText={setPrazoMinutos}
+                keyboardType="numeric"
+              />
+            </Cartao>
+          </Secao>
+          <Cartao>
+            <Linha titulo="Dormente" valor={dormente.nome} />
+            <Linha titulo="Local atual" valor={local} />
+            <Linha titulo="Situação após a operação" valor="RETIRADO" />
+          </Cartao>
+        </Formulario>
+      )}
+
+      {buscaAtiva && (
+        <Formulario
+          titulo="Localização física"
+          fechar={() => concluirBuscaFisica('CANCELADA')}
+          ocupado={processandoBusca}
+        >
+          <Cartao>
+            <Linha titulo="Dormente" valor={dormente.nome} />
+            <Linha titulo="Local cadastrado" valor={local} />
+          </Cartao>
+          <Acao
+            titulo="Confirmar encontrado"
+            destaque
+            disabled={processandoBusca}
+            onPress={() => concluirBuscaFisica('ENCONTRADO')}
+          />
+          <Acao
+            titulo="Não encontrado"
+            perigo
+            disabled={processandoBusca}
+            onPress={() => concluirBuscaFisica('NAO_ENCONTRADO')}
+          />
+        </Formulario>
+      )}
     </SafeAreaView>
   );
 }
 
 const estilos = StyleSheet.create({
   centro: { alignItems: 'center', paddingVertical: 8 },
-  rodape: { paddingHorizontal: 20, paddingVertical: 10 , gap: 12,},
+  rodape: { paddingHorizontal: 20, paddingVertical: 10, gap: 12 },
 });

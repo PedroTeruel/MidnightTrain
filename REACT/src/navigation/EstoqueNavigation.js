@@ -8,24 +8,70 @@ import { IconeBotao } from '../views/components/Interface';
 
 const Stack = createNativeStackNavigator();
 
-export default function EstoqueNavigation({  lotes,token,onSalvarLote,onSalvarDormente, onRegistrarEntrada, onRegistrarTransferencia, onRegistrarSaida, onSair,}) {
+export default function EstoqueNavigation({
+  lotes,
+  token,
+  onSalvarLote,
+  onSalvarDormente,
+  onRegistrarEntrada,
+  onRegistrarTransferencia,
+  onRegistrarSaida,
+  onAlternarExtravio,
+  onSair,
+}) {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Estoque" options={{
-        headerLargeTitle: Platform.OS === 'ios',
-        headerLeft: () => <IconeBotao titulo="Sair da conta" icone="log-out-outline" onPress={onSair} />,
-      }}>
-        {props => <StorageView {...props} lotes={lotes} onSalvarLote={onSalvarLote} />}
+      <Stack.Screen
+        name="Estoque"
+        options={{
+          headerLargeTitle: Platform.OS === 'ios',
+          headerLeft: () => (
+            <IconeBotao
+              titulo="Sair da conta"
+              icone="log-out-outline"
+              onPress={onSair}
+            />
+          ),
+        }}
+      >
+        {props => (
+          <StorageView
+            {...props}
+            lotes={lotes}
+            onSalvarLote={onSalvarLote}
+          />
+        )}
       </Stack.Screen>
       <Stack.Screen name="Lote">
-        {props => <LoteView {...props} lote={lotes.find(lote => lote.chave === props.route.params.chave)}
-          onSalvarLote={onSalvarLote} />}
+        {props => (
+          <LoteView
+            {...props}
+            lote={lotes.find(lote => lote.chave === props.route.params.chave)}
+            onSalvarLote={onSalvarLote}
+          />
+        )}
       </Stack.Screen>
       <Stack.Screen name="Dormente">
         {props => {
-          const lote = lotes.find(item => item.chave === props.route.params.chave);
-          const dormente = lote?.dormentes.find(item => item.id === props.route.params.id);
-          return <EachDormenteView {...props}lote={lote}dormente={dormente} token={token} onSalvarDormente={onSalvarDormente} onRegistrarEntrada={onRegistrarEntrada} onRegistrarTransferencia={onRegistrarTransferencia} onRegistrarSaida={onRegistrarSaida}/>;
+          const lote = lotes.find(
+            item => item.chave === props.route.params.chave
+          );
+          const dormente = lote?.dormentes.find(
+            item => item.id === props.route.params.id
+          );
+          return (
+            <EachDormenteView
+              {...props}
+              lote={lote}
+              dormente={dormente}
+              token={token}
+              onSalvarDormente={onSalvarDormente}
+              onRegistrarEntrada={onRegistrarEntrada}
+              onRegistrarTransferencia={onRegistrarTransferencia}
+              onRegistrarSaida={onRegistrarSaida}
+              onAlternarExtravio={onAlternarExtravio}
+            />
+          );
         }}
       </Stack.Screen>
     </Stack.Navigator>

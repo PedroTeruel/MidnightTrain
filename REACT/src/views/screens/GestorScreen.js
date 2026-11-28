@@ -15,11 +15,11 @@ export default function GestorScreen({ usuario, onAbrirDashboard, onSair }) {
         <Texto secundario>{usuario.nome} · {usuario.perfil}</Texto>
         <Cartao>
           <View style={styles.cartao}>
-            <Texto>O dashboard do grupo ainda está em desenvolvimento.</Texto>
-            <Acao titulo="Abrir dashboard de teste" icone="open-outline" destaque onPress={onAbrirDashboard} />
+            <Texto>Visualize os indicadores e dados do estoque em tempo real.</Texto>
+            <Acao titulo="Abrir dashboard" icone="stats-chart-outline" destaque onPress={onAbrirDashboard} />
           </View>
         </Cartao>
-        <Acao titulo="Sair da conta" icone="log-out-outline" onPress={onSair} />
+        <Acao titulo="Sair da conta" icone="log-out-outline" perigo onPress={onSair} />
       </ScrollView>
     </SafeAreaView>
   );

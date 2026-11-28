@@ -97,34 +97,63 @@ export async function carregarLocaisApi(token) {
   return consultar('/locais', token);
 }
 
-export async function registrarEntradaApi(id, localId, token) {
+export async function registrarEntradaApi(id, localId, token, opcoes = {}) {
   await enviar(
     `/dormentes/${encodeURIComponent(id)}/entrada`,
     token,
     'POST',
-    { localId }
+    { localId, ...opcoes }
   );
 
   return carregarEstoqueApi(token);
 }
 
-export async function registrarTransferenciaApi(id, destinoLocalId, token) {
+export async function registrarTransferenciaApi(id, destinoLocalId, token, opcoes = {}) {
   await enviar(
     `/dormentes/${encodeURIComponent(id)}/transferencia`,
     token,
     'POST',
-    { destinoLocalId }
+    { destinoLocalId, ...opcoes }
   );
 
   return carregarEstoqueApi(token);
 }
 
-export async function registrarSaidaApi(id, token) {
+export async function registrarSaidaApi(id, token, opcoes = {}) {
   await enviar(
     `/dormentes/${encodeURIComponent(id)}/saida`,
     token,
     'POST',
+    { ...opcoes }
+  );
+
+  return carregarEstoqueApi(token);
+}
+
+export async function iniciarBuscaDormenteApi(id, token) {
+  return enviar(
+    `/dormentes/${encodeURIComponent(id)}/buscas`,
+    token,
+    'POST',
     {}
+  );
+}
+
+export async function finalizarBuscaDormenteApi(id, buscaId, resultado, token) {
+  return enviar(
+    `/dormentes/${encodeURIComponent(id)}/buscas/${encodeURIComponent(buscaId)}`,
+    token,
+    'PATCH',
+    { resultado }
+  );
+}
+
+export async function alternarExtravioDormenteApi(id, extraviado, token) {
+  await enviar(
+    `/dormentes/${encodeURIComponent(id)}/extravio`,
+    token,
+    'PATCH',
+    { extraviado }
   );
 
   return carregarEstoqueApi(token);

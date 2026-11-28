@@ -10,26 +10,88 @@ router.use(autenticarToken);
 const condicoesValidas = ['Não avaliada', 'Boa', 'Atenção', 'Ruim'];
 
 router.get('/', async (req, res) => {
-  const loteChave = Number(req.query.loteChave);
+  const { loteChave, lote, cond, patio, idade } = req.query;
+  const chaveBruta = loteChave ?? lote;
 
-  if (!Number.isSafeInteger(loteChave) || loteChave <= 0) {
-    return res.status(400).json({
-      mensagem: 'Informe um loteChave válido.'
-    });
+  const condicoesMap = {
+    nao: 'Não avaliada',
+    boa: 'Boa',
+    atencao: 'Atenção',
+    ruim: 'Ruim'
+  };
+
+  const filtros = ['1 = 1'];
+  const parametros = [];
+
+  if (chaveBruta !== undefined && chaveBruta !== '') {
+    const chaveNum = Number(chaveBruta);
+    if (!Number.isSafeInteger(chaveNum) || chaveNum <= 0) {
+      return res.status(400).json({
+        mensagem: 'Informe um loteChave válido.'
+      });
+    }
+    filtros.push('d.loteChave = ?');
+    parametros.push(chaveNum);
   }
+
+  if (cond && cond !== 'todas') {
+    if (cond === 'extraviados') {
+      filtros.push("d.situacao_estoque = 'EXTRAVIADO'");
+    } else if (condicoesMap[cond]) {
+      filtros.push('d.condicao = ?');
+      parametros.push(condicoesMap[cond]);
+    } else {
+      return res.status(400).json({
+        mensagem: 'Filtro de condição inválido.'
+      });
+    }
+  }
+
+  if (patio && typeof patio === 'string' && patio.trim()) {
+    filtros.push('l.patio = ?');
+    parametros.push(patio.trim());
+  }
+
+  if (idade) {
+    const regrasIdade = {
+      ate7: 'DATEDIFF(NOW(), d.ultimaAtualizacao) <= 7',
+      '8a30': 'DATEDIFF(NOW(), d.ultimaAtualizacao) BETWEEN 8 AND 30',
+      mais30: 'DATEDIFF(NOW(), d.ultimaAtualizacao) > 30',
+      '31a90': 'DATEDIFF(NOW(), d.ultimaAtualizacao) BETWEEN 31 AND 90',
+      acima90: 'DATEDIFF(NOW(), d.ultimaAtualizacao) > 90'
+    };
+    if (!regrasIdade[idade]) {
+      return res.status(400).json({
+        mensagem: 'Filtro de tempo sem atualização inválido.'
+      });
+    }
+    filtros.push(regrasIdade[idade]);
+  }
+
+  const ordem = chaveBruta !== undefined && chaveBruta !== ''
+    ? 'ORDER BY d.nome'
+    : 'ORDER BY d.ultimaAtualizacao DESC, d.nome ASC LIMIT 500';
 
   try {
     const [dormentes] = await pool.execute(
-      `SELECT *
-       FROM dormentes
-       WHERE loteChave = ?
-       ORDER BY nome`,
-      [loteChave]
+      `SELECT
+         d.*,
+         l.id AS loteId,
+         l.patio AS lotePatio,
+         l.setor AS loteSetor,
+         loc.patio AS localPatio,
+         loc.setor AS localSetor
+       FROM dormentes d
+       JOIN lotes l ON l.chave = d.loteChave
+       LEFT JOIN locais loc ON loc.id = d.local_id
+       WHERE ${filtros.join(' AND ')}
+       ${ordem}`,
+      parametros
     );
 
     return res.json(dormentes);
   } catch (error) {
-    console.error('Erro ao consultar dormentes:', error.code);
+    console.error('Erro ao consultar dormentes:', error.code || error.message);
     return res.status(500).json({
       mensagem: 'Erro ao consultar dormentes.'
     });
@@ -138,6 +200,14 @@ router.post('/', async (req, res) => {
 
 
 router.post('/:id/entrada', async (req, res) => {
+
+  const prazoMinutos = Number.isFinite(Number(req.body?.prazoMinutos))
+  ? Math.max(0, Math.min(10080, Math.round(Number(req.body.prazoMinutos))))
+  : 15;
+const duracaoSegundos = Number.isFinite(Number(req.body?.duracaoSegundos))
+  ? Math.max(0, Math.min(86400, Math.round(Number(req.body.duracaoSegundos))))
+  : 0;
+
   const { id } = req.params;
   const localId = Number(req.body?.localId);
 
@@ -198,21 +268,28 @@ router.post('/:id/entrada', async (req, res) => {
 
     // Registra a entrada concluída.
     await conexao.execute(
-      `INSERT INTO movimentacoes
-       (
-         id, dormente_id, tipo, origem_local_id,
-         destino_local_id, status, registrada_por,
-         iniciada_em, concluida_em
-       )
-       VALUES (?, ?, 'ENTRADA', NULL, ?, 'CONCLUIDA', ?,
-               NOW(3), NOW(3))`,
-      [
-        movimentacaoId,
-        id,
-        localId,
-        req.usuario.id
-      ]
-    );
+  `INSERT INTO movimentacoes
+   (
+     id, dormente_id, tipo, origem_local_id,
+     destino_local_id, status, registrada_por,
+     iniciada_em, prazo_previsto_em, concluida_em
+   )
+   VALUES (
+     ?, ?, 'ENTRADA', NULL, ?, 'CONCLUIDA', ?,
+     DATE_SUB(NOW(3), INTERVAL ? SECOND),
+     DATE_ADD(DATE_SUB(NOW(3), INTERVAL ? SECOND), INTERVAL ? MINUTE),
+     NOW(3)
+   )`,
+  [
+    movimentacaoId,
+    id,
+    localId,
+    req.usuario.id,
+    duracaoSegundos,
+    duracaoSegundos,
+    prazoMinutos
+  ]
+);
 
     // Atualiza a situação e localização do dormente.
     await conexao.execute(
@@ -282,6 +359,13 @@ router.post('/:id/entrada', async (req, res) => {
 
 
 router.post('/:id/transferencia', async (req, res) => {
+  const prazoMinutos = Number.isFinite(Number(req.body?.prazoMinutos))
+    ? Math.max(0, Math.min(10080, Math.round(Number(req.body.prazoMinutos))))
+   : 15;
+  const duracaoSegundos = Number.isFinite(Number(req.body?.duracaoSegundos))
+   ? Math.max(0, Math.min(86400, Math.round(Number(req.body.duracaoSegundos))))
+   : 0;
+
   const { id } = req.params;
   const destinoLocalId = Number(req.body?.destinoLocalId);
   const observacao = req.body?.observacao ?? null;
@@ -356,23 +440,30 @@ router.post('/:id/transferencia', async (req, res) => {
     const movimentacaoId = randomUUID();
 
     await conexao.execute(
-      `INSERT INTO movimentacoes (
-        id, dormente_id, tipo,
-        origem_local_id, destino_local_id,
-        status, registrada_por,
-        iniciada_em, concluida_em, observacao
-      )
-      VALUES (?, ?, 'INTERNA', ?, ?,
-              'CONCLUIDA', ?, NOW(3), NOW(3), ?)`,
-      [
-        movimentacaoId,
-        id,
-        origemLocalId,
-        destinoLocalId,
-        req.usuario.id,
-        observacao
-      ]
-    );
+  `INSERT INTO movimentacoes (
+    id, dormente_id, tipo,
+    origem_local_id, destino_local_id,
+    status, registrada_por,
+    iniciada_em, prazo_previsto_em, concluida_em, observacao
+  )
+  VALUES (
+    ?, ?, 'INTERNA', ?, ?, 'CONCLUIDA', ?,
+    DATE_SUB(NOW(3), INTERVAL ? SECOND),
+    DATE_ADD(DATE_SUB(NOW(3), INTERVAL ? SECOND), INTERVAL ? MINUTE),
+    NOW(3), ?
+  )`,
+  [
+    movimentacaoId,
+    id,
+    origemLocalId,
+    destinoLocalId,
+    req.usuario.id,
+    duracaoSegundos,
+    duracaoSegundos,
+    prazoMinutos,
+    observacao
+  ]
+);
 
     await conexao.execute(
       `UPDATE dormentes
@@ -562,6 +653,13 @@ router.put('/:id', async (req, res) => {
 
 
 router.post('/:id/saida', async (req, res) => {
+  const prazoMinutos = Number.isFinite(Number(req.body?.prazoMinutos))
+   ? Math.max(0, Math.min(10080, Math.round(Number(req.body.prazoMinutos))))
+   : 15;
+  const duracaoSegundos = Number.isFinite(Number(req.body?.duracaoSegundos))
+   ? Math.max(0, Math.min(86400, Math.round(Number(req.body.duracaoSegundos))))
+    : 0;
+
   const { id } = req.params;
   const observacao = req.body?.observacao ?? null;
 
@@ -611,26 +709,29 @@ router.post('/:id/saida', async (req, res) => {
     const movimentacaoId = randomUUID();
 
     await conexao.execute(
-      `INSERT INTO movimentacoes (
-        id, dormente_id, tipo,
-        origem_local_id, destino_local_id,
-        status, registrada_por,
-        iniciada_em, concluida_em, observacao
-      )
-      VALUES (
-        ?, ?, 'SAIDA',
-        ?, NULL,
-        'CONCLUIDA', ?,
-        NOW(3), NOW(3), ?
-      )`,
-      [
-        movimentacaoId,
-        id,
-        origemLocalId,
-        req.usuario.id,
-        observacao
-      ]
-    );
+  `INSERT INTO movimentacoes (
+    id, dormente_id, tipo,
+    origem_local_id, destino_local_id,
+    status, registrada_por,
+    iniciada_em, prazo_previsto_em, concluida_em, observacao
+  )
+  VALUES (
+    ?, ?, 'SAIDA', ?, NULL, 'CONCLUIDA', ?,
+    DATE_SUB(NOW(3), INTERVAL ? SECOND),
+    DATE_ADD(DATE_SUB(NOW(3), INTERVAL ? SECOND), INTERVAL ? MINUTE),
+    NOW(3), ?
+  )`,
+  [
+    movimentacaoId,
+    id,
+    origemLocalId,
+    req.usuario.id,
+    duracaoSegundos,
+    duracaoSegundos,
+    prazoMinutos,
+    observacao
+  ]
+);
 
     await conexao.execute(
       `UPDATE dormentes
@@ -690,5 +791,135 @@ router.post('/:id/saida', async (req, res) => {
   }
 });
 
+// Inicia cronômetro de localização física de um dormente
+router.post('/:id/buscas', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [dormentes] = await pool.execute(
+      'SELECT id FROM dormentes WHERE id = ? LIMIT 1',
+      [id]
+    );
+
+    if (!dormentes.length) {
+      return res.status(404).json({ mensagem: 'Dormente não encontrado.' });
+    }
+
+    const buscaId = randomUUID();
+
+    await pool.execute(
+      `INSERT INTO buscas_localizacao
+       (id, dormente_id, usuario_id, iniciada_em, resultado)
+       VALUES (?, ?, ?, NOW(3), 'EM_ANDAMENTO')`,
+      [buscaId, id, req.usuario.id]
+    );
+
+    return res.status(201).json({ id: buscaId, dormente_id: id });
+  } catch (error) {
+    console.error('Erro ao iniciar busca:', error.code || error.message);
+    return res.status(500).json({ mensagem: 'Não foi possível iniciar a busca.' });
+  }
+});
+
+// Encerra a busca física como ENCONTRADO, NAO_ENCONTRADO ou CANCELADA
+router.patch('/:id/buscas/:buscaId', async (req, res) => {
+  const { id, buscaId } = req.params;
+  const { resultado } = req.body || {};
+
+  if (!['ENCONTRADO', 'NAO_ENCONTRADO', 'CANCELADA'].includes(resultado)) {
+    return res.status(400).json({ mensagem: 'Resultado de busca inválido.' });
+  }
+
+  try {
+    const [resUpdate] = await pool.execute(
+      `UPDATE buscas_localizacao
+       SET finalizada_em = NOW(3),
+           resultado = ?
+       WHERE id = ? AND dormente_id = ? AND resultado = 'EM_ANDAMENTO'`,
+      [resultado, buscaId, id]
+    );
+
+    if (!resUpdate.affectedRows) {
+      return res.status(404).json({ mensagem: 'Busca em andamento não encontrada.' });
+    }
+
+    return res.status(200).json({ id: buscaId, resultado });
+  } catch (error) {
+    console.error('Erro ao finalizar busca:', error.code || error.message);
+    return res.status(500).json({ mensagem: 'Não foi possível finalizar a busca.' });
+  }
+});
+
+// Marca ou reverte extravio de um dormente (alimenta Taxa de perdas e Alertas)
+router.patch('/:id/extravio', async (req, res) => {
+  const { id } = req.params;
+  const extraviado = req.body?.extraviado !== false;
+
+  let conexao;
+
+  try {
+    conexao = await pool.getConnection();
+    await conexao.beginTransaction();
+
+    const [dormentes] = await conexao.execute(
+      `SELECT id, situacao_estoque, local_id
+       FROM dormentes
+       WHERE id = ?
+       FOR UPDATE`,
+      [id]
+    );
+
+    const dormente = dormentes[0];
+
+    if (!dormente) {
+      await conexao.rollback();
+      return res.status(404).json({ mensagem: 'Dormente não encontrado.' });
+    }
+
+    const novaSituacao = extraviado
+      ? 'EXTRAVIADO'
+      : dormente.local_id
+        ? 'EM_ESTOQUE'
+        : 'NAO_INFORMADO';
+
+    await conexao.execute(
+      `UPDATE dormentes
+       SET situacao_estoque = ?,
+           extraviado_em = ${extraviado ? 'NOW(3)' : 'NULL'},
+           local_id = ${extraviado ? 'NULL' : 'local_id'},
+           ultimaAtualizacao = NOW(3)
+       WHERE id = ?`,
+      [novaSituacao, id]
+    );
+
+    await conexao.execute(
+      `INSERT INTO historico_alteracoes
+       (entidade, entidade_id, acao, dados_anteriores, dados_novos, usuario_id)
+       VALUES ('DORMENTE', ?, ?, ?, ?, ?)`,
+      [
+        id,
+        extraviado ? 'MARCACAO_EXTRAVIO' : 'REVERSAO_EXTRAVIO',
+        JSON.stringify({ situacao_estoque: dormente.situacao_estoque }),
+        JSON.stringify({ situacao_estoque: novaSituacao }),
+        req.usuario.id,
+      ]
+    );
+
+    await conexao.commit();
+
+    return res.status(200).json({
+      id,
+      situacao_estoque: novaSituacao,
+    });
+  } catch (error) {
+    if (conexao) await conexao.rollback().catch(() => {});
+    console.error('Erro ao atualizar extravio:', error.code || error.message);
+    return res.status(500).json({
+      mensagem: 'Não foi possível atualizar a situação de extravio.',
+    });
+  } finally {
+    if (conexao) conexao.release();
+  }
+});
 
 module.exports = router;

@@ -3,11 +3,12 @@ import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/
 import EstoqueNavigation from './src/navigation/EstoqueNavigation';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, useColorScheme } from 'react-native';
 import LoginScreen from './src/views/screens/LoginScreen';
-import GestorScreen from './src/views/screens/GestorScreen';
+import GestorNavigation from './src/navigation/GestorNavigation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { autenticarDemo } from './src/services/auth';
-import {carregarEstoqueApi,salvarLoteApi,salvarDormenteApi, registrarEntradaApi, registrarTransferenciaApi, registrarSaidaApi,} from './src/services/estoqueApi';
+import {carregarEstoqueApi,salvarLoteApi,salvarDormenteApi, registrarEntradaApi, registrarTransferenciaApi, registrarSaidaApi, alternarExtravioDormenteApi} from './src/services/estoqueApi';
 import { azul } from './src/views/components/Interface';
+
 
 const temaClaro = {
   ...DefaultTheme,
@@ -52,52 +53,28 @@ export default function App() {
   setLotes(estoqueAtualizado);
 }
 
-async function registrarEntrada(id, localId) {
-  if (!usuario?.token) {
-    throw new Error('Sessão inválida. Faça login novamente.');
-  }
-
-  const estoqueAtualizado = await registrarEntradaApi(
-    id,
-    localId,
-    usuario.token
-  );
-
+async function registrarEntrada(id, localId, opcoes) {
+  if (!usuario?.token) throw new Error('Sessão inválida. Faça login novamente.');
+  const estoqueAtualizado = await registrarEntradaApi(id, localId, usuario.token, opcoes);
   setLotes(estoqueAtualizado);
 }
 
-async function registrarTransferencia(id, destinoLocalId) {
-  if (!usuario?.token) {
-    throw new Error('Sessão inválida. Faça login novamente.');
-  }
-
-  const estoqueAtualizado = await registrarTransferenciaApi(
-    id,
-    destinoLocalId,
-    usuario.token
-  );
-
+async function registrarTransferencia(id, destinoLocalId, opcoes) {
+  if (!usuario?.token) throw new Error('Sessão inválida. Faça login novamente.');
+  const estoqueAtualizado = await registrarTransferenciaApi(id, destinoLocalId, usuario.token, opcoes);
   setLotes(estoqueAtualizado);
 }
 
-async function registrarSaida(id) {
-  if (!usuario?.token) {
-    throw new Error('Sessão inválida. Faça login novamente.');
-  }
-
-  const estoqueAtualizado = await registrarSaidaApi(
-    id,
-    usuario.token
-  );
-
+async function registrarSaida(id, opcoes) {
+  if (!usuario?.token) throw new Error('Sessão inválida. Faça login novamente.');
+  const estoqueAtualizado = await registrarSaidaApi(id, usuario.token, opcoes);
   setLotes(estoqueAtualizado);
 }
 
-  function abrirDashboard() {
-  Alert.alert(
-    'Dashboard em desenvolvimento',
-    'O painel de gerenciamento ainda não foi integrado.'
-  );
+async function alternarExtravio(id, extraviado) {
+  if (!usuario?.token) throw new Error('Sessão inválida. Faça login novamente.');
+  const estoqueAtualizado = await alternarExtravioDormenteApi(id, extraviado, usuario.token);
+  setLotes(estoqueAtualizado);
 }
 
   async function entrar(email, senha) {
@@ -126,10 +103,9 @@ async function registrarSaida(id) {
           {!usuario ? (
             <LoginScreen onEntrar={entrar} />
           ) : usuario.perfil !== 'FUNCIONARIO' ? (
-            <GestorScreen
-              usuario={usuario}
-              onAbrirDashboard={abrirDashboard}
-              onSair={() => setUsuario(null)}
+            <GestorNavigation
+               usuario={usuario}
+                onSair={() => setUsuario(null)}
             />
           ) : (
             <EstoqueNavigation
@@ -140,6 +116,7 @@ async function registrarSaida(id) {
               onRegistrarEntrada={registrarEntrada}
               onRegistrarTransferencia={registrarTransferencia}
               onRegistrarSaida={registrarSaida}
+              onAlternarExtravio={alternarExtravio}
               onSair={() => setUsuario(null)}
             />
           )}
